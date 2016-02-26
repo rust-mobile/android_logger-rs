@@ -1,4 +1,4 @@
-// Copyright 2016 The android_log Developers
+// Copyright 2016 The android_logger Developers
 //
 // Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
 // http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
@@ -16,7 +16,7 @@
 //! use log::LogLevel;
 //!
 //! fn native_activity_create() {
-//!     android_logger::init(LogLevel::Trace).unwrap();
+//!     android_logger::init_once(LogLevel::Trace);
 //!
 //!     debug!("this is a debug {}", "message");
 //!     error!("this is printed by default");
@@ -29,18 +29,16 @@
 //! ```
 
 extern crate android_log_sys as log_ffi;
-extern crate log;
+#[macro_use] extern crate log;
 
 use log_ffi::LogPriority;
-use log::{Log,LogLevel,LogMetadata,LogRecord,SetLoggerError};
+use log::{Log,LogLevel,LogMetadata,LogRecord};
 use std::ffi::{ CStr, CString };
 
 /// Output log to android system.
 fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
     unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr(), msg.as_ptr()) };
 }
-
-type LogFun = extern fn(*const u8, *const u8);
 
 struct PlatformLogger;
 
@@ -64,12 +62,17 @@ impl Log for PlatformLogger {
 
 /// Initializes the global logger with an android logger.
 ///
-/// This should be called early in the execution of a Rust program, and the
-/// global logger may only be initialized once. Future initialization attempts
-/// will return an error.
-pub fn init(log_level: LogLevel) -> Result<(), SetLoggerError> {
-    log::set_logger(|max_log_level| {
+/// This can be called many times, but will only initialize logging once,
+/// and will not replace any other previously initialized logger.
+///
+/// It is ok to call this at the activity creation, and it will be
+/// repeatedly called on every lifecycle restart (i.e. screen rotation).
+pub fn init_once(log_level: LogLevel) {
+    match log::set_logger(|max_log_level| {
         max_log_level.set(log_level.to_log_level_filter());
         return Box::new(PlatformLogger);
-    })
+    }) {
+        Err(e) => debug!("{}", e),
+        _ => (),
+    }
 }

@@ -12,7 +12,7 @@ extern crate android_logger;
 use log::LogLevel;
 
 fn native_activity_create() {
-    android_logger::init(LogLevel::Trace).unwrap(); // trace == verbose
+    android_logger::init_once(LogLevel::Trace); // trace == verbose
 
     trace!("this is a verbose {}", "message");
     error!("this is printed by default");
