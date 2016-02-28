@@ -164,11 +164,13 @@ impl<'a> PlatformLogWriter<'a> {
 
     /// Output buffer up until the \0 which will be placed at `len` position.
     fn output_specified_len(&mut self, len: usize) {
-        let last_byte: u8 = self.buffer[len];
-        self.buffer[len] = b'\0';
+        let mut last_byte: u8 = b'\0';
+        mem::swap(&mut last_byte, unsafe { self.buffer.get_unchecked_mut(len) });
+
         let msg: &CStr = unsafe { CStr::from_ptr(mem::transmute(self.buffer.as_ptr())) };
         android_log(self.priority, self.tag, msg);
-        self.buffer[len] = last_byte;
+
+        *unsafe { self.buffer.get_unchecked_mut(len) } = last_byte;
     }
 
     /// Copy `len` bytes from `index` position to starting position.
