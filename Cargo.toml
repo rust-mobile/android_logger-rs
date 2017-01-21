@@ -1,6 +1,6 @@
 [package]
 name = "android_logger"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["The android_logger Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -8,6 +8,8 @@ repository = "https://github.com/Nercury/android_logger-rs"
 description = """
 A logging implementation for `log` which hooks to android log output.
 """
+keywords = ["android", "bindings", "log", "logger"]
+categories = ["api-bindings"]
 
 [dependencies.log]
 version = "0.3"
