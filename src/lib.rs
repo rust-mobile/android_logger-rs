@@ -36,6 +36,7 @@ use log::{Log,LogLevel,LogMetadata,LogRecord};
 use std::ffi::CStr;
 use std::mem;
 use std::fmt;
+use std::ptr;
 
 /// Output log to android system.
 fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
@@ -175,10 +176,9 @@ impl<'a> PlatformLogWriter<'a> {
 
     /// Copy `len` bytes from `index` position to starting position.
     fn copy_bytes_to_start(&mut self, index: usize, len: usize) {
-        for i in 0..len {
-            *unsafe { self.buffer.get_unchecked_mut(i) } =
-                *unsafe { self.buffer.get_unchecked_mut(i + index) };
-        }
+        let src = unsafe { self.buffer.as_ptr().offset(index as isize) };
+        let dst = self.buffer.as_mut_ptr();
+        unsafe { ptr::copy(src, dst, len) };
     }
 }
 
