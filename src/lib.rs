@@ -40,7 +40,7 @@ use std::ptr;
 
 /// Output log to android system.
 fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
-    unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr(), msg.as_ptr()) };
+    unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr() as *const log_ffi::c_char, msg.as_ptr() as *const log_ffi::c_char) };
 }
 
 struct PlatformLogger;
