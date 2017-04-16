@@ -43,7 +43,7 @@ fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
     unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr() as *const log_ffi::c_char, msg.as_ptr() as *const log_ffi::c_char) };
 }
 
-pub struct PlatformLogger;
+struct PlatformLogger;
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
