@@ -43,12 +43,19 @@ fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
     unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr() as *const log_ffi::c_char, msg.as_ptr() as *const log_ffi::c_char) };
 }
 
-pub struct PlatformLogger;
+/// Underlying android logger, for cases where `init_once` abstraction is not enough.
+pub struct AndroidLogger;
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
-impl Log for PlatformLogger {
+impl AndroidLogger {
+    pub fn new() -> AndroidLogger {
+        AndroidLogger
+    }
+}
+
+impl Log for AndroidLogger {
     fn enabled(&self, _: &LogMetadata) -> bool {
         true
     }
@@ -76,7 +83,7 @@ impl Log for PlatformLogger {
     }
 }
 
-impl PlatformLogger {
+impl AndroidLogger {
     fn fill_tag_bytes(&self, array: &mut [u8], record: &LogRecord) {
         let tag_bytes_iter = record.location().module_path().bytes();
         if tag_bytes_iter.len() > LOGGING_TAG_MAX_LEN {
@@ -234,7 +241,7 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 pub fn init_once(log_level: LogLevel) {
     match log::set_logger(|max_log_level| {
         max_log_level.set(log_level.to_log_level_filter());
-        return Box::new(PlatformLogger);
+        return Box::new(AndroidLogger::new());
     }) {
         Err(e) => debug!("{}", e),
         _ => (),
