@@ -49,8 +49,8 @@ pub struct AndroidLogger;
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
-impl AndroidLogger {
-    pub fn new() -> AndroidLogger {
+impl Default for AndroidLogger {
+    fn default() -> AndroidLogger {
         AndroidLogger
     }
 }
@@ -241,7 +241,7 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 pub fn init_once(log_level: LogLevel) {
     match log::set_logger(|max_log_level| {
         max_log_level.set(log_level.to_log_level_filter());
-        return Box::new(AndroidLogger::new());
+        return Box::new(AndroidLogger::default());
     }) {
         Err(e) => debug!("{}", e),
         _ => (),
