@@ -16,3 +16,6 @@ version = "0.3"
 
 [dependencies.android_log-sys]
 version = "0.1"
+
+[badges]
+travis-ci = { repository = "Nercury/android_logger-rs" }
