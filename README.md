@@ -1,5 +1,8 @@
 ## A logger which uses android logging backend
 
+[![Version](https://img.shields.io/crates/v/android_logger.svg)](https://crates.io/crates/android_logger)
+[![Build Status](https://travis-ci.org/Dushistov/android_logger-rs.png)](https://travis-ci.org/Dushistov/android_logger-rs)
+
 This, of course, works only under android and requires linking to `log` which
 is only available under android.
 
