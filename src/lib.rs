@@ -29,6 +29,7 @@
 //! ```
 
 extern crate android_log_sys as log_ffi;
+#[macro_use]
 extern crate log;
 
 use log_ffi::LogPriority;
@@ -243,6 +244,7 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
 pub fn init_once(log_level: Level) {
     log::set_max_level(log_level.to_level_filter());
-    log::set_logger(&AndroidLogger).unwrap();
-
+    if let Err(err) = log::set_logger(&AndroidLogger) {
+        debug!("android_logger: log::set_logger failed: {}", err);
+    }
 }
