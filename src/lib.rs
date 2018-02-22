@@ -120,7 +120,7 @@ struct PlatformLogWriter<'a> {
 }
 
 impl<'a> PlatformLogWriter<'a> {
-    pub fn new<'r>(level: Level, tag: &'r CStr) -> PlatformLogWriter<'r> {
+    pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
         PlatformLogWriter {
             priority: match level {
                 Level::Warn => LogPriority::WARN,
@@ -201,7 +201,7 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut incomming_bytes = s.as_bytes();
 
-        while incomming_bytes.len() > 0 {
+        while !incomming_bytes.is_empty() {
             let len = self.len;
 
             // write everything possible to buffer and mark last \n
