@@ -13,15 +13,15 @@
 //! #[macro_use] extern crate log;
 //! extern crate android_logger;
 //!
-//! use log::LogLevel;
+//! use log::Level;
 //!
 //! fn native_activity_create() {
-//!     android_logger::init_once(LogLevel::Trace);
+//!     android_logger::init_once(Level::Trace);
 //!
 //!     debug!("this is a debug {}", "message");
 //!     error!("this is printed by default");
 //!
-//!     if log_enabled!(LogLevel::Info) {
+//!     if log_enabled!(Level::Info) {
 //!         let x = 3 * 4; // expensive computation
 //!         info!("the answer was: {}", x);
 //!     }
@@ -29,10 +29,11 @@
 //! ```
 
 extern crate android_log_sys as log_ffi;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 use log_ffi::LogPriority;
-use log::{Log,LogLevel,LogMetadata,LogRecord};
+use log::{Log,Level,Metadata,Record};
 use std::ffi::CStr;
 use std::mem;
 use std::fmt;
@@ -56,11 +57,11 @@ impl Default for AndroidLogger {
 }
 
 impl Log for AndroidLogger {
-    fn enabled(&self, _: &LogMetadata) -> bool {
+    fn enabled(&self, _: &Metadata) -> bool {
         true
     }
 
-    fn log(&self, record: &LogRecord) {
+    fn log(&self, record: &Record) {
         // tag must not exceed LOGGING_TAG_MAX_LEN
         let mut tag_bytes: [u8; LOGGING_TAG_MAX_LEN + 1] = unsafe { mem::uninitialized() };
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
@@ -81,11 +82,14 @@ impl Log for AndroidLogger {
         // output the remaining message (this would usually be the most common case)
         writer.flush();
     }
+
+    fn flush(&self) {
+    }
 }
 
 impl AndroidLogger {
-    fn fill_tag_bytes(&self, array: &mut [u8], record: &LogRecord) {
-        let tag_bytes_iter = record.location().module_path().bytes();
+    fn fill_tag_bytes(&self, array: &mut [u8], record: &Record) {
+        let tag_bytes_iter = record.module_path().unwrap_or_default().bytes();
         if tag_bytes_iter.len() > LOGGING_TAG_MAX_LEN {
             for (input, output) in tag_bytes_iter
                 .take(LOGGING_TAG_MAX_LEN - 2)
@@ -114,14 +118,14 @@ struct PlatformLogWriter<'a> {
 }
 
 impl<'a> PlatformLogWriter<'a> {
-    pub fn new<'r>(level: LogLevel, tag: &'r CStr) -> PlatformLogWriter<'r> {
+    pub fn new<'r>(level: Level, tag: &'r CStr) -> PlatformLogWriter<'r> {
         PlatformLogWriter {
             priority: match level {
-                LogLevel::Warn => LogPriority::WARN,
-                LogLevel::Info => LogPriority::INFO,
-                LogLevel::Debug => LogPriority::DEBUG,
-                LogLevel::Error => LogPriority::ERROR,
-                LogLevel::Trace => LogPriority::VERBOSE,
+                Level::Warn => LogPriority::WARN,
+                Level::Info => LogPriority::INFO,
+                Level::Debug => LogPriority::DEBUG,
+                Level::Error => LogPriority::ERROR,
+                Level::Trace => LogPriority::VERBOSE,
             },
             len: 0,
             last_newline_index: 0,
@@ -238,12 +242,9 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 ///
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
-pub fn init_once(log_level: LogLevel) {
-    match log::set_logger(|max_log_level| {
-        max_log_level.set(log_level.to_log_level_filter());
-        return Box::new(AndroidLogger::default());
-    }) {
-        Err(e) => debug!("{}", e),
-        _ => (),
+pub fn init_once(log_level: Level) {
+    log::set_max_level(log_level.to_level_filter());
+    if let Err(err) = log::set_logger(&AndroidLogger) {
+        debug!("android_logger: log::set_logger failed: {}", err);
     }
 }
