@@ -1,12 +1,21 @@
-## A logger which uses android logging backend
+## Send Rust logs to Logcat
 
 [![Version](https://img.shields.io/crates/v/android_logger.svg)](https://crates.io/crates/android_logger)
 [![Build Status](https://travis-ci.org/Nercury/android_logger-rs.svg?branch=master)](https://travis-ci.org/Nercury/android_logger-rs)
 
-This, of course, works only under android and requires linking to `log` which
-is only available under android.
+This library is a drop-in replacement for `env_logger`. Instead, it outputs messages to
+android's logcat.
 
-Example:
+This only works on Android and requires linking to `log` which
+is only available under android. With Cargo, it is possible to conditionally require
+this library:
+
+```toml
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.4"
+```
+
+Example of initialization on activity creation:
 
 ```rust
 #[macro_use] extern crate log;
@@ -21,6 +30,14 @@ fn native_activity_create() {
     error!("this is printed by default");
 }
 ```
+
+There is a caveat that this library can only be initialized once 
+(hence the `init_once` function name). However, Android native activity can be
+re-created every time the screen is rotated, resulting in multiple initialization calls.
+Therefore this library will only log a warning for subsequent `init_once` calls.
+
+This library ensures that logged messages do not overflow Android log message limits
+by efficiently splitting messages into chunks.
 
 ## License
 
