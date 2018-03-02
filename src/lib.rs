@@ -33,7 +33,7 @@ extern crate android_log_sys as log_ffi;
 extern crate log;
 
 use log_ffi::LogPriority;
-use log::{Log,Level,Metadata,Record};
+use log::{Level, Log, Metadata, Record};
 use std::ffi::CStr;
 use std::mem;
 use std::fmt;
@@ -41,7 +41,13 @@ use std::ptr;
 
 /// Output log to android system.
 fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
-    unsafe { log_ffi::__android_log_write(prio as log_ffi::c_int, tag.as_ptr() as *const log_ffi::c_char, msg.as_ptr() as *const log_ffi::c_char) };
+    unsafe {
+        log_ffi::__android_log_write(
+            prio as log_ffi::c_int,
+            tag.as_ptr() as *const log_ffi::c_char,
+            msg.as_ptr() as *const log_ffi::c_char,
+        )
+    };
 }
 
 /// Underlying android logger, for cases where `init_once` abstraction is not enough.
@@ -71,10 +77,7 @@ impl Log for AndroidLogger {
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
-        let mut writer = PlatformLogWriter::new(
-            record.level(),
-            tag
-        );
+        let mut writer = PlatformLogWriter::new(record.level(), tag);
 
         // use PlatformLogWriter to output chunks if they exceed max size
         let _ = fmt::write(&mut writer, *record.args());
@@ -83,8 +86,7 @@ impl Log for AndroidLogger {
         writer.flush();
     }
 
-    fn flush(&self) {
-    }
+    fn flush(&self) {}
 }
 
 impl AndroidLogger {
@@ -118,7 +120,7 @@ struct PlatformLogWriter<'a> {
 }
 
 impl<'a> PlatformLogWriter<'a> {
-    pub fn new<'r>(level: Level, tag: &'r CStr) -> PlatformLogWriter<'r> {
+    pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
         PlatformLogWriter {
             priority: match level {
                 Level::Warn => LogPriority::WARN,
@@ -177,7 +179,9 @@ impl<'a> PlatformLogWriter<'a> {
     /// Output buffer up until the \0 which will be placed at `len` position.
     fn output_specified_len(&mut self, len: usize) {
         let mut last_byte: u8 = b'\0';
-        mem::swap(&mut last_byte, unsafe { self.buffer.get_unchecked_mut(len) });
+        mem::swap(&mut last_byte, unsafe {
+            self.buffer.get_unchecked_mut(len)
+        });
 
         let msg: &CStr = unsafe { CStr::from_ptr(mem::transmute(self.buffer.as_ptr())) };
         android_log(self.priority, self.tag, msg);
@@ -197,17 +201,22 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut incomming_bytes = s.as_bytes();
 
-        while incomming_bytes.len() > 0 {
+        while !incomming_bytes.is_empty() {
             let len = self.len;
 
             // write everything possible to buffer and mark last \n
             let new_len = len + incomming_bytes.len();
-            let last_newline = self.buffer[len..LOGGING_MSG_MAX_LEN].iter_mut()
+            let last_newline = self.buffer[len..LOGGING_MSG_MAX_LEN]
+                .iter_mut()
                 .zip(incomming_bytes)
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
                     *output = *input;
-                    if *input == b'\n' { Some(i) } else { acc }
+                    if *input == b'\n' {
+                        Some(i)
+                    } else {
+                        acc
+                    }
                 });
 
             // update last \n index
