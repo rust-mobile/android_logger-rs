@@ -30,7 +30,15 @@
 
 extern crate android_log_sys as log_ffi;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate log;
+
+use std::sync::Mutex;
+
+lazy_static! {
+    static ref FILTER: Mutex<Option<String>> = Mutex::new(None);
+}
 
 use log_ffi::LogPriority;
 use log::{Level, Log, Metadata, Record};
@@ -68,6 +76,12 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
+        if let Some(ref filter) = *FILTER.lock().unwrap() {
+            // A filter has been set. If it doesn't include the Record module, bail.
+            if !filter.split(',').any(|module| Some(module) == record.module_path()) {
+                return;
+            }
+        }
         // tag must not exceed LOGGING_TAG_MAX_LEN
         let mut tag_bytes: [u8; LOGGING_TAG_MAX_LEN + 1] = unsafe { mem::uninitialized() };
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
@@ -256,4 +270,10 @@ pub fn init_once(log_level: Level) {
     if let Err(err) = log::set_logger(&AndroidLogger) {
         debug!("android_logger: log::set_logger failed: {}", err);
     }
+}
+
+/// Filter which modules print logs. Separated by comma.
+/// `None` will print all the logs.
+pub fn set_filter(filter: Option<String>) {
+    *FILTER.lock().unwrap() = filter;
 }

@@ -12,7 +12,7 @@ this library:
 
 ```toml
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.4"
+android_logger = "0.5"
 ```
 
 Example of initialization on activity creation:
