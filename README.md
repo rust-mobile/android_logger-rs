@@ -12,22 +12,40 @@ this library:
 
 ```toml
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.4"
+android_logger = "0.5"
 ```
 
-Example of initialization on activity creation:
+Example of initialization on activity creation, with log filters:
 
 ```rust
 #[macro_use] extern crate log;
 extern crate android_logger;
 
 use log::LogLevel;
+use android_logger::Filter;
 
 fn native_activity_create() {
-    android_logger::init_once(LogLevel::Trace); // trace == verbose
+    android_logger::init_once(
+        Filter::default()
+            .with_min_level(Level::Trace) // limit log level
+            .with_allowed_module_path("hello::crate") // limit messages to specific crate
+    ); 
 
     trace!("this is a verbose {}", "message");
     error!("this is printed by default");
+}
+```
+
+To allow all logs, use the default filter:
+
+```rust
+#[macro_use] extern crate log;
+extern crate android_logger;
+
+use android_logger::Filter;
+
+fn native_activity_create() {
+    android_logger::init_once(Filter::default());
 }
 ```
 
