@@ -104,15 +104,6 @@ impl Default for AndroidLogger {
     }
 }
 
-impl AndroidLogger {
-    /// Create a new logger with custom filter
-    pub fn new(filter: Filter) -> AndroidLogger {
-        AndroidLogger {
-            filter: RwLock::new(filter)
-        }
-    }
-}
-
 impl Log for AndroidLogger {
     fn enabled(&self, _: &Metadata) -> bool {
         true
@@ -420,6 +411,14 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 
         Ok(())
     }
+}
+
+/// Send a log record to Android logging backend.
+///
+/// This action does not require initialization. However, without initialization it
+/// will use the default filter, which allows all logs.
+pub fn log(record: &Record) {
+    ANDROID_LOGGER.log(record)
 }
 
 /// Initializes the global logger with an android logger.
