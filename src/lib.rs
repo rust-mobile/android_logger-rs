@@ -84,7 +84,7 @@ fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
 fn android_log(_priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
-struct AndroidLogger {
+pub struct AndroidLogger {
     filter: RwLock<Filter>,
 }
 
@@ -96,9 +96,19 @@ const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Default for AndroidLogger {
+    /// Create a new logger with default filter
     fn default() -> AndroidLogger {
         AndroidLogger {
             filter: RwLock::new(Filter::default()),
+        }
+    }
+}
+
+impl AndroidLogger {
+    /// Create a new logger with custom filter
+    pub fn new(filter: Filter) -> AndroidLogger {
+        AndroidLogger {
+            filter: RwLock::new(filter)
         }
     }
 }
