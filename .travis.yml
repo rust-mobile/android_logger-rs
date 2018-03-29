@@ -22,3 +22,4 @@ script:
   - cargo check --target=aarch64-linux-android
   - cargo check --target=i686-linux-android
   - cargo doc
+  - cargo test
