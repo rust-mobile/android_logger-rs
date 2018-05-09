@@ -36,7 +36,7 @@ fn native_activity_create() {
 }
 ```
 
-To allow all logs, use the default filter:
+To allow all logs, use the default filter with min level Trace:
 
 ```rust
 #[macro_use] extern crate log;
@@ -45,7 +45,8 @@ extern crate android_logger;
 use android_logger::Filter;
 
 fn native_activity_create() {
-    android_logger::init_once(Filter::default());
+    android_logger::init_once(Filter::default()
+                              .with_min_level(Level::Trace));
 }
 ```
 
