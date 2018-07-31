@@ -28,7 +28,8 @@ fn native_activity_create() {
     android_logger::init_once(
         Filter::default()
             .with_min_level(Level::Trace) // limit log level
-            .with_allowed_module_path("hello::crate") // limit messages to specific crate
+            .with_allowed_module_path("hello::crate"), // limit messages to specific crate
+        Some("mytag") // logs will show under mytag tag. If `None`, the crate name will be used
     ); 
 
     trace!("this is a verbose {}", "message");
@@ -45,8 +46,7 @@ extern crate android_logger;
 use android_logger::Filter;
 
 fn native_activity_create() {
-    android_logger::init_once(Filter::default()
-                              .with_min_level(Level::Trace));
+    android_logger::init_once(Filter::default().with_min_level(Level::Trace), None);
 }
 ```
 
