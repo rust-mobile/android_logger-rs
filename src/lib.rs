@@ -19,8 +19,8 @@
 //! /// Android code may not have obvious "main", this is just an example.
 //! fn main() {
 //!     android_logger::init_once(
-//!         Filter::default()
-//!             .with_min_level(Level::Trace)
+//!         Filter::default().with_min_level(Level::Trace),
+//!         None
 //!     );
 //!
 //!     debug!("this is a debug {}", "message");
@@ -30,7 +30,8 @@
 //!
 //! ## Example with module path filter
 //!
-//! It is possible to limit log messages to output from a specific crate:
+//! It is possible to limit log messages to output from a specific crate,
+//! and override the logcat tag name (by default, the crate name is used):
 //!
 //! ```
 //! #[macro_use] extern crate log;
@@ -43,7 +44,8 @@
 //!     android_logger::init_once(
 //!         Filter::default()
 //!             .with_min_level(Level::Trace)
-//!             .with_allowed_module_path("hello::crate")
+//!             .with_allowed_module_path("hello::crate"),
+//!         Some("mytag")
 //!     );
 //!
 //!     // ..
@@ -62,7 +64,7 @@ use std::sync::RwLock;
 #[cfg(target_os = "android")]
 use log_ffi::LogPriority;
 use log::{Level, Log, Metadata, Record};
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::mem;
 use std::fmt;
 use std::ptr;
@@ -86,6 +88,7 @@ fn android_log(_priority: Level, _tag: &CStr, _msg: &CStr) {}
 /// Underlying android logger backend
 pub struct AndroidLogger {
     filter: RwLock<Filter>,
+    tag: RwLock<Option<CString>>,
 }
 
 lazy_static! {
@@ -99,6 +102,7 @@ impl Default for AndroidLogger {
     /// Create a new logger with default filter
     fn default() -> AndroidLogger {
         AndroidLogger {
+            tag: RwLock::new(None),
             filter: RwLock::new(Filter::default()),
         }
     }
@@ -122,8 +126,15 @@ impl Log for AndroidLogger {
 
         // tag must not exceed LOGGING_TAG_MAX_LEN
         let mut tag_bytes: [u8; LOGGING_TAG_MAX_LEN + 1] = unsafe { mem::uninitialized() };
+
+        // If no tag was specified, use module name
+        let tag = self.tag.read().expect("failed to acquire android_log tag lock for read");
+        let tag = tag.as_ref().map(|s| s.as_bytes()).unwrap_or_else(|| {
+            record.module_path().unwrap_or_default().as_bytes()
+        });
+
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
-        self.fill_tag_bytes(&mut tag_bytes, record);
+        self.fill_tag_bytes(&mut tag_bytes, tag);
         // use stack array as C string
         let tag: &CStr = unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) };
 
@@ -142,22 +153,21 @@ impl Log for AndroidLogger {
 }
 
 impl AndroidLogger {
-    fn fill_tag_bytes(&self, array: &mut [u8], record: &Record) {
-        let tag_bytes_iter = record.module_path().unwrap_or_default().bytes();
-        if tag_bytes_iter.len() > LOGGING_TAG_MAX_LEN {
-            for (input, output) in tag_bytes_iter
+    fn fill_tag_bytes(&self, array: &mut [u8], tag: &[u8]) {
+        if tag.len() > LOGGING_TAG_MAX_LEN {
+            for (input, output) in tag.iter()
                 .take(LOGGING_TAG_MAX_LEN - 2)
-                .chain(b"..\0".iter().cloned())
+                .chain(b"..\0".iter())
                 .zip(array.iter_mut())
             {
-                *output = input;
+                *output = *input;
             }
         } else {
-            for (input, output) in tag_bytes_iter
-                .chain(b"\0".iter().cloned())
+            for (input, output) in tag.iter()
+                .chain(b"\0".iter())
                 .zip(array.iter_mut())
             {
-                *output = input;
+                *output = *input;
             }
         }
     }
@@ -428,7 +438,7 @@ pub fn log(record: &Record) {
 ///
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
-pub fn init_once(filter: Filter) {
+pub fn init_once(filter: Filter, tag: Option<&str>) {
     if let Err(err) = log::set_logger(&*ANDROID_LOGGER) {
         debug!("android_logger: log::set_logger failed: {}", err);
     } else {
@@ -439,5 +449,9 @@ pub fn init_once(filter: Filter) {
             .filter
             .write()
             .expect("failed to acquire android_log filter lock for write") = filter;
+        *ANDROID_LOGGER
+            .tag
+            .write()
+            .expect("failed to acquire android_log filter lock for write") = tag.map(|s| CString::new(s).expect("Can't convert tag to CString"))
     }
 }
