@@ -127,11 +127,11 @@ impl Log for AndroidLogger {
         // tag must not exceed LOGGING_TAG_MAX_LEN
         let mut tag_bytes: [u8; LOGGING_TAG_MAX_LEN + 1] = unsafe { mem::uninitialized() };
 
+        let module_path = record.module_path().unwrap_or_default().to_owned();
+
         // If no tag was specified, use module name
-        let tag = self.tag.read().expect("failed to acquire android_log tag lock for read");
-        let tag = tag.as_ref().map(|s| s.as_bytes()).unwrap_or_else(|| {
-            record.module_path().unwrap_or_default().as_bytes()
-        });
+        let custom_tag = self.tag.read().expect("failed to acquire android_log tag lock for read");
+        let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or(module_path.as_bytes());
 
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
         self.fill_tag_bytes(&mut tag_bytes, tag);
@@ -142,8 +142,13 @@ impl Log for AndroidLogger {
         // therefore split log message into multiple log calls
         let mut writer = PlatformLogWriter::new(record.level(), tag);
 
-        // use PlatformLogWriter to output chunks if they exceed max size
-        let _ = fmt::write(&mut writer, *record.args());
+        // If a custom tag is used, add the module path to the message.
+        // Use PlatformLogWriter to output chunks if they exceed max size.
+        let _ = if custom_tag.is_some() {
+            fmt::write(&mut writer, format_args!("{}: {}", module_path, *record.args()))
+        } else {
+            fmt::write(&mut writer, *record.args())
+        };
 
         // output the remaining message (this would usually be the most common case)
         writer.flush();
