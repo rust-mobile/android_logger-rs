@@ -12,7 +12,7 @@ this library:
 
 ```toml
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.5"
+android_logger = "0.7"
 ```
 
 Example of initialization on activity creation, with log filters:
@@ -21,7 +21,7 @@ Example of initialization on activity creation, with log filters:
 #[macro_use] extern crate log;
 extern crate android_logger;
 
-use log::LogLevel;
+use log::Level;
 use android_logger::Filter;
 
 fn native_activity_create() {
@@ -43,6 +43,7 @@ To allow all logs, use the default filter with min level Trace:
 #[macro_use] extern crate log;
 extern crate android_logger;
 
+use log::Level;
 use android_logger::Filter;
 
 fn native_activity_create() {
