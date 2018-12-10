@@ -268,7 +268,7 @@ impl Filter {
 
         self.allow_module_paths
             .iter()
-            .any(|allowed_path| allowed_path == path)
+            .any(|allowed_path| path.contains(allowed_path))
     }
 }
 
