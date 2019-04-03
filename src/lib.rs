@@ -14,13 +14,12 @@
 //! extern crate android_logger;
 //!
 //! use log::Level;
-//! use android_logger::Filter;
+//! use android_logger::Config;
 //!
 //! /// Android code may not have obvious "main", this is just an example.
 //! fn main() {
 //!     android_logger::init_once(
-//!         Filter::default().with_min_level(Level::Trace),
-//!         None
+//!         Config::default().with_min_level(Level::Trace),
 //!     );
 //!
 //!     debug!("this is a debug {}", "message");
@@ -38,14 +37,14 @@
 //! extern crate android_logger;
 //!
 //! use log::Level;
-//! use android_logger::Filter;
+//! use android_logger::{Config,FilterBuilder};
 //!
 //! fn main() {
 //!     android_logger::init_once(
-//!         Filter::default()
+//!         Config::default()
 //!             .with_min_level(Level::Trace)
-//!             .with_allowed_module_path("hello::crate"),
-//!         Some("mytag")
+//!             .with_tag("mytag")
+//!             .with_filter(FilterBuilder::new().parse("debug,hello::crate=trace").build()),
 //!     );
 //!
 //!     // ..
@@ -59,6 +58,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 
+extern crate env_logger;
+
 use std::sync::RwLock;
 
 #[cfg(target_os = "android")]
@@ -68,6 +69,8 @@ use std::ffi::{CStr, CString};
 use std::mem;
 use std::fmt;
 use std::ptr;
+
+pub use env_logger::filter::{Filter, Builder as FilterBuilder};
 
 /// Output log to android system.
 #[cfg(target_os = "android")]
@@ -87,8 +90,7 @@ fn android_log(_priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
 pub struct AndroidLogger {
-    filter: RwLock<Filter>,
-    tag: RwLock<Option<CString>>,
+    config: RwLock<Config>,
 }
 
 lazy_static! {
@@ -99,11 +101,10 @@ const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Default for AndroidLogger {
-    /// Create a new logger with default filter
+    /// Create a new logger with default config
     fn default() -> AndroidLogger {
         AndroidLogger {
-            tag: RwLock::new(None),
-            filter: RwLock::new(Filter::default()),
+            config: RwLock::new(Config::default()),
         }
     }
 }
@@ -114,14 +115,12 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
-        if let Some(module_path) = record.module_path() {
-            let filter = self.filter
-                .read()
-                .expect("failed to acquire android_log filter lock for read");
+        let config = self.config
+            .read()
+            .expect("failed to acquire android_log filter lock for read");
 
-            if !filter.is_module_path_allowed(module_path) {
-                return;
-            }
+        if !config.filter_matches(record) {
+            return;
         }
 
         // tag must not exceed LOGGING_TAG_MAX_LEN
@@ -130,7 +129,7 @@ impl Log for AndroidLogger {
         let module_path = record.module_path().unwrap_or_default().to_owned();
 
         // If no tag was specified, use module name
-        let custom_tag = self.tag.read().expect("failed to acquire android_log tag lock for read");
+        let custom_tag = &config.tag;
         let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or(module_path.as_bytes());
 
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
@@ -179,21 +178,23 @@ impl AndroidLogger {
 }
 
 /// Filter for android logger.
-pub struct Filter {
+pub struct Config {
     log_level: Option<Level>,
-    allow_module_paths: Vec<String>,
+    filter: Option<env_logger::filter::Filter>,
+    tag: Option<CString>,
 }
 
-impl Default for Filter {
+impl Default for Config {
     fn default() -> Self {
-        Filter {
+        Config {
             log_level: None,
-            allow_module_paths: Vec::new(),
+            filter: None,
+            tag: None,
         }
     }
 }
 
-impl Filter {
+impl Config {
     /// Change the minimum log level.
     ///
     /// All values above the set level are logged. For example, if
@@ -203,82 +204,22 @@ impl Filter {
         self
     }
 
-    /// Set allowed module path.
-    ///
-    /// Allow log entry only if module path matches specified path exactly.
-    ///
-    /// ## Example:
-    ///
-    /// ```
-    /// use android_logger::Filter;
-    ///
-    /// let filter = Filter::default().with_allowed_module_path("crate");
-    ///
-    /// assert!(filter.is_module_path_allowed("crate"));
-    /// assert!(!filter.is_module_path_allowed("other_crate"));
-    /// assert!(!filter.is_module_path_allowed("crate::subcrate"));
-    /// ```
-    ///
-    /// ## Multiple rules example:
-    ///
-    /// ```
-    /// use android_logger::Filter;
-    ///
-    /// let filter = Filter::default()
-    ///     .with_allowed_module_path("A")
-    ///     .with_allowed_module_path("B");
-    ///
-    /// assert!(filter.is_module_path_allowed("A"));
-    /// assert!(filter.is_module_path_allowed("B"));
-    /// assert!(!filter.is_module_path_allowed("C"));
-    /// assert!(!filter.is_module_path_allowed("A::B"));
-    /// ```
-    pub fn with_allowed_module_path<S: Into<String>>(mut self, path: S) -> Self {
-        self.allow_module_paths.push(path.into());
-        self
-    }
-
-    /// Set multiple allowed module paths.
-    ///
-    /// Same as `with_allowed_module_path`, but accepts list of paths.
-    ///
-    /// ## Example:
-    ///
-    /// ```
-    /// use android_logger::Filter;
-    ///
-    /// let filter = Filter::default()
-    ///     .with_allowed_module_paths(["A", "B"].iter().map(|i| i.to_string()));
-    ///
-    /// assert!(filter.is_module_path_allowed("A"));
-    /// assert!(filter.is_module_path_allowed("B"));
-    /// assert!(!filter.is_module_path_allowed("C"));
-    /// assert!(!filter.is_module_path_allowed("A::B"));
-    /// ```
-    pub fn with_allowed_module_paths<I: IntoIterator<Item = String>>(mut self, paths: I) -> Self {
-        self.allow_module_paths.extend(paths.into_iter());
-        self
-    }
-
-    /// Check if module path is allowed by filter rules.
-    pub fn is_module_path_allowed(&self, path: &str) -> bool {
-        if self.allow_module_paths.is_empty() {
-            return true;
+    fn filter_matches(&self, record: &Record) -> bool {
+        if let Some(ref filter) = self.filter {
+            filter.matches(&record)
+        } else {
+            true
         }
-
-        self.allow_module_paths
-            .iter()
-            .any(|allowed_path| allowed_path == path)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::Filter;
+    pub fn with_filter(mut self, filter: env_logger::filter::Filter) -> Self {
+        self.filter = Some(filter);
+        self
+    }
 
-    #[test]
-    fn with_allowed_module_path() {
-        assert!(Filter::default().is_module_path_allowed("random"));
+    pub fn with_tag<S: Into<Vec<u8>>>(mut self, tag: S) -> Self {
+        self.tag = Some(CString::new(tag).expect("Can't convert tag to CString"));
+        self
     }
 }
 
@@ -304,7 +245,7 @@ impl<'a> PlatformLogWriter<'a> {
             },
             len: 0,
             last_newline_index: 0,
-            tag: tag,
+            tag,
             buffer: unsafe { mem::uninitialized() },
         }
     }
@@ -315,7 +256,7 @@ impl<'a> PlatformLogWriter<'a> {
             priority: level,
             len: 0,
             last_newline_index: 0,
-            tag: tag,
+            tag,
             buffer: unsafe { mem::uninitialized() },
         }
     }
@@ -443,20 +384,16 @@ pub fn log(record: &Record) {
 ///
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
-pub fn init_once(filter: Filter, tag: Option<&str>) {
+pub fn init_once(config: Config) {
     if let Err(err) = log::set_logger(&*ANDROID_LOGGER) {
         debug!("android_logger: log::set_logger failed: {}", err);
     } else {
-        if let Some(level) = filter.log_level {
+        if let Some(level) = config.log_level {
             log::set_max_level(level.to_level_filter());
         }
         *ANDROID_LOGGER
-            .filter
+            .config
             .write()
-            .expect("failed to acquire android_log filter lock for write") = filter;
-        *ANDROID_LOGGER
-            .tag
-            .write()
-            .expect("failed to acquire android_log filter lock for write") = tag.map(|s| CString::new(s).expect("Can't convert tag to CString"))
+            .expect("failed to acquire android_log filter lock for write") = config;
     }
 }
