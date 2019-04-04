@@ -15,21 +15,24 @@ this library:
 android_logger = "0.8.1"
 ```
 
-Example of initialization on activity creation, with log filters:
+Example of initialization on activity creation, with log configuration:
 
 ```rust
 #[macro_use] extern crate log;
 extern crate android_logger;
 
 use log::Level;
-use android_logger::Filter;
+use android_logger::{Config,FilterBuilder};
 
 fn native_activity_create() {
     android_logger::init_once(
-        Filter::default()
+        Config::default()
             .with_min_level(Level::Trace) // limit log level
-            .with_allowed_module_path("hello::crate"), // limit messages to specific crate
-        Some("mytag") // logs will show under mytag tag. If `None`, the crate name will be used
+            .with_tag("mytag") // logs will show under mytag tag
+            .with_filter( // configure messages for specific crate
+                FilterBuilder::new()
+                    .parse("debug,hello::crate=error")
+                    .build())
     );
 
     trace!("this is a verbose {}", "message");
@@ -37,17 +40,18 @@ fn native_activity_create() {
 }
 ```
 
-To allow all logs, use the default filter with min level Trace:
+To allow all logs, use the default configuration with min level Trace:
 
 ```rust
 #[macro_use] extern crate log;
 extern crate android_logger;
 
 use log::Level;
-use android_logger::Filter;
+use android_logger::Config;
 
 fn native_activity_create() {
-    android_logger::init_once(Filter::default().with_min_level(Level::Trace), None);
+    android_logger::init_once(
+        Config::default().with_min_level(Level::Trace));
 }
 ```
 
