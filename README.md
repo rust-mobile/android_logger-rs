@@ -12,7 +12,7 @@ this library:
 
 ```toml
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.7"
+android_logger = "0.8.1"
 ```
 
 Example of initialization on activity creation, with log filters:
@@ -30,7 +30,7 @@ fn native_activity_create() {
             .with_min_level(Level::Trace) // limit log level
             .with_allowed_module_path("hello::crate"), // limit messages to specific crate
         Some("mytag") // logs will show under mytag tag. If `None`, the crate name will be used
-    ); 
+    );
 
     trace!("this is a verbose {}", "message");
     error!("this is printed by default");
@@ -51,7 +51,7 @@ fn native_activity_create() {
 }
 ```
 
-There is a caveat that this library can only be initialized once 
+There is a caveat that this library can only be initialized once
 (hence the `init_once` function name). However, Android native activity can be
 re-created every time the screen is rotated, resulting in multiple initialization calls.
 Therefore this library will only log a warning for subsequent `init_once` calls.
