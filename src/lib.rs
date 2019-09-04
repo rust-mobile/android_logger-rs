@@ -93,6 +93,15 @@ pub struct AndroidLogger {
     config: RwLock<Config>,
 }
 
+impl AndroidLogger {
+    /// Create new logger instance from config
+    pub fn new(config: Config) -> AndroidLogger {
+        AndroidLogger {
+            config: RwLock::new(config),
+        }
+    }
+}
+
 lazy_static! {
    static ref ANDROID_LOGGER: AndroidLogger = AndroidLogger::default();
 }
