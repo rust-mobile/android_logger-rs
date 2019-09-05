@@ -11,6 +11,10 @@ A logging implementation for `log` which hooks to android log output.
 keywords = ["android", "bindings", "log", "logger"]
 categories = ["api-bindings"]
 
+[features]
+default = ["regex"]
+regex = ["env_logger/regex"]
+
 [dependencies]
 lazy_static = "1.0"
 
@@ -22,6 +26,7 @@ version = "0.1"
 
 [dependencies.env_logger]
 version = "0.6"
+default-features = false
 
 [badges]
 travis-ci = { repository = "Nercury/android_logger-rs" }
