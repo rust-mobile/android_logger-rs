@@ -133,6 +133,7 @@ impl Log for AndroidLogger {
         }
 
         // tag must not exceed LOGGING_TAG_MAX_LEN
+        #[allow(deprecated)] // created an issue #35 for this
         let mut tag_bytes: [u8; LOGGING_TAG_MAX_LEN + 1] = unsafe { mem::uninitialized() };
 
         let module_path = record.module_path().unwrap_or_default().to_owned();
@@ -244,6 +245,7 @@ struct PlatformLogWriter<'a> {
 impl<'a> PlatformLogWriter<'a> {
     #[cfg(target_os = "android")]
     pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
+        #[allow(deprecated)] // created an issue #35 for this
         PlatformLogWriter {
             priority: match level {
                 Level::Warn => LogPriority::WARN,
@@ -261,6 +263,7 @@ impl<'a> PlatformLogWriter<'a> {
 
     #[cfg(not(target_os = "android"))]
     pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
+        #[allow(deprecated)] // created an issue #35 for this
         PlatformLogWriter {
             priority: level,
             len: 0,
