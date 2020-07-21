@@ -1,6 +1,6 @@
 [package]
 name = "android_logger"
-version = "0.8.6"
+version = "0.9.0"
 authors = ["The android_logger Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -16,13 +16,13 @@ default = ["regex"]
 regex = ["env_logger/regex"]
 
 [dependencies]
-lazy_static = "1.0"
+lazy_static = "1.4"
 
 [dependencies.log]
 version = "0.4"
 
 [dependencies.android_log-sys]
-version = "0.1"
+version = "0.2"
 
 [dependencies.env_logger]
 version = "0.7"
