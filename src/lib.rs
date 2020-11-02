@@ -324,7 +324,7 @@ impl<'a> PlatformLogWriter<'a> {
     }
 
     /// Flush everything remaining to android logger.
-    fn flush(&mut self) {
+    pub fn flush(&mut self) {
         let total_len = self.len;
 
         if total_len == 0 {
