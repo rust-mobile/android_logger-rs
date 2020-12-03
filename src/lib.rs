@@ -71,6 +71,9 @@ use std::fmt;
 use std::ptr;
 
 pub use env_logger::filter::{Filter, Builder as FilterBuilder};
+pub use env_logger::fmt::Formatter;
+
+pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
 /// Output log to android system.
 #[cfg(target_os = "android")]
@@ -153,10 +156,13 @@ impl Log for AndroidLogger {
 
         // If a custom tag is used, add the module path to the message.
         // Use PlatformLogWriter to output chunks if they exceed max size.
-        let _ = if custom_tag.is_some() {
-            fmt::write(&mut writer, format_args!("{}: {}", module_path, *record.args()))
-        } else {
-            fmt::write(&mut writer, *record.args())
+        let _ = match (custom_tag, &config.custom_format) {
+            (_, Some(format)) => format(&mut writer, record),
+            (Some(_), _) => fmt::write(
+                &mut writer,
+                format_args!("{}: {}", module_path, *record.args()),
+            ),
+            _ => fmt::write(&mut writer, *record.args()),
         };
 
         // output the remaining message (this would usually be the most common case)
@@ -192,6 +198,7 @@ pub struct Config {
     log_level: Option<Level>,
     filter: Option<env_logger::filter::Filter>,
     tag: Option<CString>,
+    custom_format: Option<FormatFn>,
 }
 
 impl Default for Config {
@@ -200,6 +207,7 @@ impl Default for Config {
             log_level: None,
             filter: None,
             tag: None,
+            custom_format: None,
         }
     }
 }
@@ -229,6 +237,14 @@ impl Config {
 
     pub fn with_tag<S: Into<Vec<u8>>>(mut self, tag: S) -> Self {
         self.tag = Some(CString::new(tag).expect("Can't convert tag to CString"));
+        self
+    }
+
+    pub fn format<F>(mut self, format: F) -> Self
+    where
+        F: Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send + 'static,
+    {
+        self.custom_format = Some(Box::new(format));
         self
     }
 }
