@@ -50,6 +50,18 @@
 //!     // ..
 //! }
 //! ```
+//!
+//! ## Example with a custom log formatter
+//!
+//! ```
+//! use android_logger::Config;
+//!
+//! android_logger::init_once(
+//!     Config::default()
+//!         .with_min_level(log::Level::Trace)
+//!         .format(|f, record| write!(f, "my_app: {}", record.args()))
+//! )
+//! ```
 
 #[cfg(target_os = "android")]
 extern crate android_log_sys as log_ffi;
@@ -240,6 +252,15 @@ impl Config {
         self
     }
 
+    /// Sets the format function for formatting the log output.
+    /// ```
+    /// # use android_logger::Config;
+    /// android_logger::init_once(
+    ///     Config::default()
+    ///         .with_min_level(log::Level::Trace)
+    ///         .format(|f, record| write!(f, "my_app: {}", record.args()))
+    /// )
+    /// ```
     pub fn format<F>(mut self, format: F) -> Self
     where
         F: Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send + 'static,
