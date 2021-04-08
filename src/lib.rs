@@ -74,15 +74,15 @@ extern crate env_logger;
 
 use std::sync::RwLock;
 
+use log::{Level, Log, Metadata, Record};
 #[cfg(target_os = "android")]
 use log_ffi::LogPriority;
-use log::{Level, Log, Metadata, Record};
 use std::ffi::{CStr, CString};
-use std::mem;
 use std::fmt;
+use std::mem;
 use std::ptr;
 
-pub use env_logger::filter::{Filter, Builder as FilterBuilder};
+pub use env_logger::filter::{Builder as FilterBuilder, Filter};
 pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
@@ -118,7 +118,7 @@ impl AndroidLogger {
 }
 
 lazy_static! {
-   static ref ANDROID_LOGGER: AndroidLogger = AndroidLogger::default();
+    static ref ANDROID_LOGGER: AndroidLogger = AndroidLogger::default();
 }
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
@@ -139,7 +139,8 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
-        let config = self.config
+        let config = self
+            .config
             .read()
             .expect("failed to acquire android_log filter lock for read");
 
@@ -155,7 +156,10 @@ impl Log for AndroidLogger {
 
         // If no tag was specified, use module name
         let custom_tag = &config.tag;
-        let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or(module_path.as_bytes());
+        let tag = custom_tag
+            .as_ref()
+            .map(|s| s.as_bytes())
+            .unwrap_or(module_path.as_bytes());
 
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
         self.fill_tag_bytes(&mut tag_bytes, tag);
@@ -187,7 +191,8 @@ impl Log for AndroidLogger {
 impl AndroidLogger {
     fn fill_tag_bytes(&self, array: &mut [u8], tag: &[u8]) {
         if tag.len() > LOGGING_TAG_MAX_LEN {
-            for (input, output) in tag.iter()
+            for (input, output) in tag
+                .iter()
                 .take(LOGGING_TAG_MAX_LEN - 2)
                 .chain(b"..\0".iter())
                 .zip(array.iter_mut())
@@ -195,10 +200,7 @@ impl AndroidLogger {
                 *output = *input;
             }
         } else {
-            for (input, output) in tag.iter()
-                .chain(b"\0".iter())
-                .zip(array.iter_mut())
-            {
+            for (input, output) in tag.iter().chain(b"\0".iter()).zip(array.iter_mut()) {
                 *output = *input;
             }
         }
@@ -271,8 +273,10 @@ impl Config {
 }
 
 struct PlatformLogWriter<'a> {
-    #[cfg(target_os = "android")] priority: LogPriority,
-    #[cfg(not(target_os = "android"))] priority: Level,
+    #[cfg(target_os = "android")]
+    priority: LogPriority,
+    #[cfg(not(target_os = "android"))]
+    priority: Level,
     len: usize,
     last_newline_index: usize,
     tag: &'a CStr,
@@ -444,5 +448,192 @@ pub fn init_once(config: Config) {
             .config
             .write()
             .expect("failed to acquire android_log filter lock for write") = config;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt::Write;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn check_config_values() {
+        // Filter is checked in config_filter_match below.
+        let config = Config::default()
+            .with_min_level(Level::Trace)
+            .with_tag("my_app");
+
+        assert_eq!(config.log_level, Some(Level::Trace));
+        assert_eq!(config.tag, Some(CString::new("my_app").unwrap()));
+    }
+
+    #[test]
+    fn log_calls_formatter() {
+        static FORMAT_FN_WAS_CALLED: AtomicBool = AtomicBool::new(false);
+        let config = Config::default()
+            .with_min_level(Level::Info)
+            .format(|_, _| {
+                FORMAT_FN_WAS_CALLED.store(true, Ordering::SeqCst);
+                Ok(())
+            });
+        let logger = AndroidLogger::new(config);
+
+        logger.log(&Record::builder().level(Level::Info).build());
+
+        assert!(FORMAT_FN_WAS_CALLED.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn logger_always_enabled() {
+        let logger = AndroidLogger::new(Config::default());
+
+        assert!(logger.enabled(&log::MetadataBuilder::new().build()));
+    }
+
+    // Test whether the filter gets called correctly. Not meant to be exhaustive for all filter
+    // options, as these are handled directly by the filter itself.
+    #[test]
+    fn config_filter_match() {
+        let info_record = Record::builder().level(Level::Info).build();
+        let debug_record = Record::builder().level(Level::Debug).build();
+
+        let info_all_filter = env_logger::filter::Builder::new().parse("info").build();
+        let info_all_config = Config::default().with_filter(info_all_filter);
+
+        assert!(info_all_config.filter_matches(&info_record));
+        assert!(!info_all_config.filter_matches(&debug_record));
+    }
+
+    #[test]
+    fn fill_tag_bytes_truncates_long_tag() {
+        let logger = AndroidLogger::new(Config::default());
+        let too_long_tag: [u8; LOGGING_TAG_MAX_LEN + 20] = [b'a'; LOGGING_TAG_MAX_LEN + 20];
+
+        let mut result: [u8; LOGGING_TAG_MAX_LEN + 1] = Default::default();
+        logger.fill_tag_bytes(&mut result, &too_long_tag);
+
+        let mut expected_result = [b'a'; LOGGING_TAG_MAX_LEN - 2].to_vec();
+        expected_result.extend("..\0".as_bytes());
+        assert_eq!(result.to_vec(), expected_result);
+    }
+
+    #[test]
+    fn fill_tag_bytes_keeps_short_tag() {
+        let logger = AndroidLogger::new(Config::default());
+        let short_tag: [u8; 3] = [b'a'; 3];
+
+        let mut result: [u8; LOGGING_TAG_MAX_LEN + 1] = Default::default();
+        logger.fill_tag_bytes(&mut result, &short_tag);
+
+        let mut expected_result = short_tag.to_vec();
+        expected_result.push(0);
+        assert_eq!(result.to_vec()[..4], expected_result);
+    }
+
+    #[test]
+    fn platform_log_writer_init_values() {
+        let tag = CStr::from_bytes_with_nul(b"tag\0").unwrap();
+
+        let writer = PlatformLogWriter::new(Level::Warn, &tag);
+
+        assert_eq!(writer.tag, tag);
+        // Android uses LogPriority instead, which doesn't implement equality checks
+        #[cfg(not(target_os = "android"))]
+        assert_eq!(writer.priority, Level::Warn);
+    }
+
+    #[test]
+    fn temporal_flush() {
+        let mut writer = get_tag_writer();
+
+        writer
+            .write_str("12\n\n567\n90")
+            .expect("Unable to write to PlatformLogWriter");
+
+        assert_eq!(writer.len, 10);
+        writer.temporal_flush();
+        // Should have flushed up until the last newline.
+        assert_eq!(writer.len, 3);
+        assert_eq!(writer.last_newline_index, 0);
+        assert_eq!(&writer.buffer.to_vec()[..writer.len], "\n90".as_bytes());
+
+        writer.temporal_flush();
+        // Should have flushed all remaining bytes.
+        assert_eq!(writer.len, 0);
+        assert_eq!(writer.last_newline_index, 0);
+    }
+
+    #[test]
+    fn flush() {
+        let mut writer = get_tag_writer();
+        writer
+            .write_str("abcdefghij\n\nklm\nnopqr\nstuvwxyz")
+            .expect("Unable to write to PlatformLogWriter");
+
+        writer.flush();
+
+        assert_eq!(writer.last_newline_index, 0);
+        assert_eq!(writer.len, 0);
+    }
+
+    #[test]
+    fn last_newline_index() {
+        let mut writer = get_tag_writer();
+
+        writer
+            .write_str("12\n\n567\n90")
+            .expect("Unable to write to PlatformLogWriter");
+
+        assert_eq!(writer.last_newline_index, 7);
+    }
+
+    #[test]
+    fn output_specified_len_leaves_buffer_unchanged() {
+        let mut writer = get_tag_writer();
+        let log_string = "abcdefghij\n\nklm\nnopqr\nstuvwxyz";
+        writer
+            .write_str(log_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        writer.output_specified_len(5);
+
+        assert_eq!(
+            writer.buffer[..log_string.len()].to_vec(),
+            log_string.as_bytes()
+        );
+    }
+
+    #[test]
+    fn copy_bytes_to_start() {
+        let mut writer = get_tag_writer();
+        writer
+            .write_str("0123456789")
+            .expect("Unable to write to PlatformLogWriter");
+
+        writer.copy_bytes_to_start(3, 2);
+
+        assert_eq!(writer.buffer[..10].to_vec(), "3423456789".as_bytes());
+    }
+
+    #[test]
+    fn copy_bytes_to_start_nop() {
+        let test_string = "Test_string_with\n\n\n\nnewlines\n";
+        let mut writer = get_tag_writer();
+        writer
+            .write_str(test_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        writer.copy_bytes_to_start(0, 20);
+        writer.copy_bytes_to_start(10, 0);
+
+        assert_eq!(
+            writer.buffer[..test_string.len()].to_vec(),
+            test_string.as_bytes()
+        );
+    }
+
+    fn get_tag_writer() -> PlatformLogWriter<'static> {
+        PlatformLogWriter::new(Level::Warn, &CStr::from_bytes_with_nul(b"tag\0").unwrap())
     }
 }
