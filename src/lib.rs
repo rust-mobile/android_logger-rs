@@ -627,10 +627,14 @@ mod tests {
         writer.copy_bytes_to_start(0, 20);
         writer.copy_bytes_to_start(10, 0);
 
+<<<<<<< HEAD
         assert_eq!(
             writer.buffer[..test_string.len()].to_vec(),
             test_string.as_bytes()
         );
+=======
+        assert_eq!(writer.buffer[..test_string.len()].to_vec(), test_string.as_bytes());
+>>>>>>> 11484f05ece05c80a62dc8fe799709291e9eda27
     }
 
     fn get_tag_writer() -> PlatformLogWriter<'static> {
