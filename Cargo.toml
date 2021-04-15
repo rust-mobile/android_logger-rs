@@ -1,6 +1,6 @@
 [package]
 name = "android_logger"
-version = "0.11.0"
+version = "0.10.1"
 authors = ["The android_logger Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
