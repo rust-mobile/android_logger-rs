@@ -1,4 +1,4 @@
-name: Rust
+name: Continuous integration
 
 on:
   push:
@@ -10,11 +10,44 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+        toolchain:
+          - stable
+          - beta
+          - nightly
+        target:
+          - arm-linux-androideabi
+          - armv7-linux-androideabi
+          - aarch64-linux-android
+          - i686-linux-android
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
+      - uses: actions/checkout@v2
+
+      - name: Install Rust ${{ matrix.toolchain }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          target: ${{ matrix.target }}
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Generate docs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
