@@ -151,7 +151,7 @@ impl Log for AndroidLogger {
 
         // If no tag was specified, use module name
         let custom_tag = &config.tag;
-        let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or(module_path.as_bytes());
+        let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or_else(|| module_path.as_bytes());
 
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
         self.fill_tag_bytes(&mut tag_bytes, tag);
@@ -202,22 +202,12 @@ impl AndroidLogger {
 }
 
 /// Filter for android logger.
+#[derive(Default)]
 pub struct Config {
     log_level: Option<Level>,
     filter: Option<env_logger::filter::Filter>,
     tag: Option<CString>,
     custom_format: Option<FormatFn>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            log_level: None,
-            filter: None,
-            tag: None,
-            custom_format: None,
-        }
-    }
 }
 
 impl Config {
@@ -232,7 +222,7 @@ impl Config {
 
     fn filter_matches(&self, record: &Record) -> bool {
         if let Some(ref filter) = self.filter {
-            filter.matches(&record)
+            filter.matches(record)
         } else {
             true
         }
@@ -361,7 +351,7 @@ impl<'a> PlatformLogWriter<'a> {
 
     /// Copy `len` bytes from `index` position to starting position.
     fn copy_bytes_to_start(&mut self, index: usize, len: usize) {
-        let src = unsafe { self.buffer.as_ptr().offset(index as isize) };
+        let src = unsafe { self.buffer.as_ptr().add(index) };
         let dst = self.buffer.as_mut_ptr();
         unsafe { ptr::copy(src, dst, len) };
     }
@@ -524,7 +514,7 @@ mod tests {
     fn platform_log_writer_init_values() {
         let tag = CStr::from_bytes_with_nul(b"tag\0").unwrap();
 
-        let writer = PlatformLogWriter::new(Level::Warn, &tag);
+        let writer = PlatformLogWriter::new(Level::Warn, tag);
 
         assert_eq!(writer.tag, tag);
         // Android uses LogPriority instead, which doesn't implement equality checks
@@ -623,6 +613,6 @@ mod tests {
     }
 
     fn get_tag_writer() -> PlatformLogWriter<'static> {
-        PlatformLogWriter::new(Level::Warn, &CStr::from_bytes_with_nul(b"tag\0").unwrap())
+        PlatformLogWriter::new(Level::Warn, CStr::from_bytes_with_nul(b"tag\0").unwrap())
     }
 }
