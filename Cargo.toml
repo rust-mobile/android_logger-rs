@@ -16,7 +16,7 @@ default = ["regex"]
 regex = ["env_logger/regex"]
 
 [dependencies]
-lazy_static = "1.4"
+once_cell = "1.9"
 
 [dependencies.log]
 version = "0.4"
