@@ -256,7 +256,7 @@ impl Config {
     }
 }
 
-struct PlatformLogWriter<'a> {
+pub struct PlatformLogWriter<'a> {
     #[cfg(target_os = "android")] priority: LogPriority,
     #[cfg(not(target_os = "android"))] priority: Level,
     len: usize,
@@ -324,7 +324,7 @@ impl<'a> PlatformLogWriter<'a> {
     }
 
     /// Flush everything remaining to android logger.
-    fn flush(&mut self) {
+    pub fn flush(&mut self) {
         let total_len = self.len;
 
         if total_len == 0 {
