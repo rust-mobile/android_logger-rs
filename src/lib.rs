@@ -72,15 +72,15 @@ extern crate log;
 
 extern crate env_logger;
 
+use log::{Level, Log, Metadata, Record};
 #[cfg(target_os = "android")]
 use log_ffi::LogPriority;
-use log::{Level, Log, Metadata, Record};
 use std::ffi::{CStr, CString};
-use std::mem;
 use std::fmt;
+use std::mem;
 use std::ptr;
 
-pub use env_logger::filter::{Filter, Builder as FilterBuilder};
+pub use env_logger::filter::{Builder as FilterBuilder, Filter};
 pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
@@ -115,7 +115,6 @@ impl AndroidLogger {
     }
 }
 
-
 static ANDROID_LOGGER: OnceCell<AndroidLogger> = OnceCell::new();
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
@@ -136,8 +135,7 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
-        let config = self.config
-            .get_or_init(Config::default);
+        let config = self.config.get_or_init(Config::default);
 
         if !config.filter_matches(record) {
             return;
@@ -151,7 +149,10 @@ impl Log for AndroidLogger {
 
         // If no tag was specified, use module name
         let custom_tag = &config.tag;
-        let tag = custom_tag.as_ref().map(|s| s.as_bytes()).unwrap_or_else(|| module_path.as_bytes());
+        let tag = custom_tag
+            .as_ref()
+            .map(|s| s.as_bytes())
+            .unwrap_or_else(|| module_path.as_bytes());
 
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
         self.fill_tag_bytes(&mut tag_bytes, tag);
@@ -183,7 +184,8 @@ impl Log for AndroidLogger {
 impl AndroidLogger {
     fn fill_tag_bytes(&self, array: &mut [u8], tag: &[u8]) {
         if tag.len() > LOGGING_TAG_MAX_LEN {
-            for (input, output) in tag.iter()
+            for (input, output) in tag
+                .iter()
                 .take(LOGGING_TAG_MAX_LEN - 2)
                 .chain(b"..\0".iter())
                 .zip(array.iter_mut())
@@ -191,10 +193,7 @@ impl AndroidLogger {
                 *output = *input;
             }
         } else {
-            for (input, output) in tag.iter()
-                .chain(b"\0".iter())
-                .zip(array.iter_mut())
-            {
+            for (input, output) in tag.iter().chain(b"\0".iter()).zip(array.iter_mut()) {
                 *output = *input;
             }
         }
@@ -257,8 +256,10 @@ impl Config {
 }
 
 pub struct PlatformLogWriter<'a> {
-    #[cfg(target_os = "android")] priority: LogPriority,
-    #[cfg(not(target_os = "android"))] priority: Level,
+    #[cfg(target_os = "android")]
+    priority: LogPriority,
+    #[cfg(not(target_os = "android"))]
+    priority: Level,
     len: usize,
     last_newline_index: usize,
     tag: &'a CStr,
@@ -409,7 +410,9 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
 /// This action does not require initialization. However, without initialization it
 /// will use the default filter, which allows all logs.
 pub fn log(record: &Record) {
-    ANDROID_LOGGER.get_or_init(AndroidLogger::default).log(record)
+    ANDROID_LOGGER
+        .get_or_init(AndroidLogger::default)
+        .log(record)
 }
 
 /// Initializes the global logger with an android logger.
