@@ -267,21 +267,26 @@ pub struct PlatformLogWriter<'a> {
 
 impl<'a> PlatformLogWriter<'a> {
     #[cfg(target_os = "android")]
-    pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
+    pub fn new_with_priority(priority: log_ffi::LogPriority, tag: &CStr) -> PlatformLogWriter {
         #[allow(deprecated)] // created an issue #35 for this
         PlatformLogWriter {
-            priority: match level {
-                Level::Warn => LogPriority::WARN,
-                Level::Info => LogPriority::INFO,
-                Level::Debug => LogPriority::DEBUG,
-                Level::Error => LogPriority::ERROR,
-                Level::Trace => LogPriority::VERBOSE,
-            },
+            priority,
             len: 0,
             last_newline_index: 0,
             tag,
             buffer: uninit_array(),
         }
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
+        Self::new_with_priority(match level {
+            Level::Warn => LogPriority::WARN,
+            Level::Info => LogPriority::INFO,
+            Level::Debug => LogPriority::DEBUG,
+            Level::Error => LogPriority::ERROR,
+            Level::Trace => LogPriority::VERBOSE,
+        })
     }
 
     #[cfg(not(target_os = "android"))]
