@@ -113,6 +113,10 @@ impl AndroidLogger {
             config: OnceCell::from(config),
         }
     }
+
+    fn config(&self) -> &Config {
+        self.config.get_or_init(Config::default)
+    }
 }
 
 static ANDROID_LOGGER: OnceCell<AndroidLogger> = OnceCell::new();
@@ -130,13 +134,21 @@ impl Default for AndroidLogger {
 }
 
 impl Log for AndroidLogger {
-    fn enabled(&self, _: &Metadata) -> bool {
-        true
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        let config = self.config();
+        // todo: consider __android_log_is_loggable.
+        Some(metadata.level()) >= config.log_level
     }
 
     fn log(&self, record: &Record) {
-        let config = self.config.get_or_init(Config::default);
+        let config = self.config();
 
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        // this also checks the level, but only if a filter was
+        // installed.
         if !config.filter_matches(record) {
             return;
         }
