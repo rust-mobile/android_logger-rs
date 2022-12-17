@@ -25,7 +25,7 @@ version = "0.4"
 version = "0.2"
 
 [dependencies.env_logger]
-version = "0.9"
+version = "0.10"
 default-features = false
 
 [badges]
