@@ -28,26 +28,12 @@ jobs:
           - i686-linux-android
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - name: Install Rust ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@${{ matrix.toolchain }}
         with:
-          profile: minimal
-          toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
 
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Generate docs
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo build --target=${{ matrix.target }}
+      - run: cargo doc --target=${{ matrix.target }}
+      - run: cargo test --target=${{ matrix.target }}

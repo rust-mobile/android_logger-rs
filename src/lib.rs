@@ -292,13 +292,16 @@ impl<'a> PlatformLogWriter<'a> {
 
     #[cfg(target_os = "android")]
     pub fn new(level: Level, tag: &CStr) -> PlatformLogWriter {
-        Self::new_with_priority(match level {
-            Level::Warn => LogPriority::WARN,
-            Level::Info => LogPriority::INFO,
-            Level::Debug => LogPriority::DEBUG,
-            Level::Error => LogPriority::ERROR,
-            Level::Trace => LogPriority::VERBOSE,
-        })
+        Self::new_with_priority(
+            match level {
+                Level::Warn => LogPriority::WARN,
+                Level::Info => LogPriority::INFO,
+                Level::Debug => LogPriority::DEBUG,
+                Level::Error => LogPriority::ERROR,
+                Level::Trace => LogPriority::VERBOSE,
+            },
+            tag,
+        )
     }
 
     #[cfg(not(target_os = "android"))]
