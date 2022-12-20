@@ -30,10 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: dtolnay/rust-toolchain@${{ matrix.toolchain }}
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
 
       - run: cargo build --target=${{ matrix.target }}
       - run: cargo doc --target=${{ matrix.target }}
-      - run: cargo test --target=${{ matrix.target }}
+      # Temporary test non-target only.
+      # TODO: Test in emulator or something.
+      - run: cargo test
