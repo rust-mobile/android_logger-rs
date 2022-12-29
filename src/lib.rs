@@ -137,7 +137,7 @@ impl Log for AndroidLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
         let config = self.config();
         // todo: consider __android_log_is_loggable.
-        Some(metadata.level()) >= config.log_level
+        Some(metadata.level()) <= config.log_level
     }
 
     fn log(&self, record: &Record) {
