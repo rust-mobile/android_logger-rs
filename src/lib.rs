@@ -492,13 +492,6 @@ mod tests {
         assert!(FORMAT_FN_WAS_CALLED.load(Ordering::SeqCst));
     }
 
-    #[test]
-    fn logger_always_enabled() {
-        let logger = AndroidLogger::new(Config::default());
-
-        assert!(logger.enabled(&log::MetadataBuilder::new().build()));
-    }
-
     // Test whether the filter gets called correctly. Not meant to be exhaustive for all filter
     // options, as these are handled directly by the filter itself.
     #[test]
