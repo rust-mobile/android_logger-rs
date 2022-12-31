@@ -509,6 +509,15 @@ mod tests {
         assert!(FORMAT_FN_WAS_CALLED.load(Ordering::SeqCst));
     }
 
+    #[test]
+    fn logger_enabled_threshold() {
+        let logger = AndroidLogger::new(Config::default().with_filter_level(LevelFilter::Info));
+
+        assert!(logger.enabled(&log::MetadataBuilder::new().level(Level::Warn).build()));
+        assert!(logger.enabled(&log::MetadataBuilder::new().level(Level::Info).build()));
+        assert!(!logger.enabled(&log::MetadataBuilder::new().level(Level::Debug).build()));
+    }
+
     // Test whether the filter gets called correctly. Not meant to be exhaustive for all filter
     // options, as these are handled directly by the filter itself.
     #[test]
