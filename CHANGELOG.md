@@ -14,6 +14,7 @@ All user visible changes to this project will be documented in this file. This p
 ### BC Breaks
 
 - Added `buf_id` argument to `PlatformLogWriter::new()` method allowing to specify concrete Android logging system buffer. ([#50], [#64])
+- Removed deprecated `Config::with_min_level()` method accepting `log::Level`. ([#65])
 
 ### Added
 
@@ -21,6 +22,7 @@ All user visible changes to this project will be documented in this file. This p
 
 [#50]: /../../pull/50
 [#64]: /../../pull/64
+[#65]: /../../pull/65
 
 
 
