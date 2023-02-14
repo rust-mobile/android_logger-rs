@@ -6,6 +6,25 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.13.0] · 2023-02-??
+[0.13.0]: /../../tree/v0.13.0
+
+[Diff](/../../compare/v0.12.0...v0.13.0)
+
+### BC Breaks
+
+- Added `buf_id` argument to `PlatformLogWriter::new()` method allowing to specify concrete Android logging system buffer. ([#50], [#64])
+
+### Added
+
+- `Config::with_log_buffer()` method to specify concrete Android logging system buffer. ([#50], [#64])
+
+[#50]: /../../pull/50
+[#64]: /../../pull/64
+
+
+
+
 ## [0.12.0] · 2023-01-19
 [0.12.0]: /../../tree/v0.12.0
 
