@@ -271,13 +271,6 @@ pub struct Config {
 }
 
 impl Config {
-    // TODO: Remove on 0.13 version release.
-    /// **DEPRECATED**, use [`Config::with_max_level()`] instead.
-    #[deprecated(note = "use `.with_max_level()` instead")]
-    pub fn with_min_level(self, level: Level) -> Self {
-        self.with_max_level(level.to_level_filter())
-    }
-
     /// Changes the maximum log level.
     ///
     /// Note, that `Trace` is the maximum level, because it provides the
