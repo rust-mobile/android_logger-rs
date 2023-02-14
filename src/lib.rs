@@ -85,60 +85,61 @@ pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
-/// Identifies a specific log buffer to use when logging a message.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+/// Possible identifiers of a specific buffer of Android logging system for
+/// logging a message.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LogId {
-    /// The main log buffer.
+    /// Main log buffer.
     ///
     /// This is the only log buffer available to apps.
     Main,
 
-    /// The radio log buffer.
+    /// Radio log buffer.
     Radio,
 
-    /// The event log buffer.
+    /// Event log buffer.
     Events,
 
-    /// The system log buffer.
+    /// System log buffer.
     System,
 
-    /// The crash log buffer.
+    /// Crash log buffer.
     Crash,
 
-    /// The kernel log buffer.
+    /// Kernel log buffer.
     Kernel,
 
-    /// The security log buffer.
+    /// Security log buffer.
     Security,
 
-    /// The statistics log buffer.
+    /// Statistics log buffer.
     Stats,
 }
 
+#[cfg(target_os = "android")]
 impl LogId {
-    #[cfg(target_os = "android")]
     fn to_native(log_id: Option<Self>) -> log_ffi::log_id_t {
         match log_id {
-            Some(LogId::Main) => log_ffi::log_id_t::MAIN,
-            Some(LogId::Radio) => log_ffi::log_id_t::RADIO,
-            Some(LogId::Events) => log_ffi::log_id_t::EVENTS,
-            Some(LogId::System) => log_ffi::log_id_t::SYSTEM,
-            Some(LogId::Crash) => log_ffi::log_id_t::CRASH,
-            Some(LogId::Kernel) => log_ffi::log_id_t::KERNEL,
-            Some(LogId::Security) => log_ffi::log_id_t::SECURITY,
-            Some(LogId::Stats) => log_ffi::log_id_t::STATS,
+            Some(Self::Main) => log_ffi::log_id_t::MAIN,
+            Some(Self::Radio) => log_ffi::log_id_t::RADIO,
+            Some(Self::Events) => log_ffi::log_id_t::EVENTS,
+            Some(Self::System) => log_ffi::log_id_t::SYSTEM,
+            Some(Self::Crash) => log_ffi::log_id_t::CRASH,
+            Some(Self::Kernel) => log_ffi::log_id_t::KERNEL,
+            Some(Self::Security) => log_ffi::log_id_t::SECURITY,
+            Some(Self::Stats) => log_ffi::log_id_t::STATS,
             None => log_ffi::log_id_t::DEFAULT,
         }
     }
 }
 
-/// Output log to android system.
+/// Outputs log to Android system.
 #[cfg(target_os = "android")]
-fn android_log(log_id: log_ffi::log_id_t, prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
+fn android_log(buf_id: log_ffi::log_id_t, prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
     unsafe {
         log_ffi::__android_log_buf_write(
-            log_id as i32,
-            prio as i32,
+            buf_id as log_ffi::c_int,
+            prio as log_ffi::c_int,
             tag.as_ptr() as *const log_ffi::c_char,
             msg.as_ptr() as *const log_ffi::c_char,
         );
@@ -147,7 +148,7 @@ fn android_log(log_id: log_ffi::log_id_t, prio: log_ffi::LogPriority, tag: &CStr
 
 /// Dummy output placeholder for tests.
 #[cfg(not(target_os = "android"))]
-fn android_log(_log_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
+fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
 pub struct AndroidLogger {
@@ -220,7 +221,7 @@ impl Log for AndroidLogger {
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
-        let mut writer = PlatformLogWriter::new(config.log_id, record.level(), tag);
+        let mut writer = PlatformLogWriter::new(config.buf_id, record.level(), tag);
 
         // If a custom tag is used, add the module path to the message.
         // Use PlatformLogWriter to output chunks if they exceed max size.
@@ -263,7 +264,7 @@ impl AndroidLogger {
 #[derive(Default)]
 pub struct Config {
     log_level: Option<LevelFilter>,
-    log_id: Option<LogId>,
+    buf_id: Option<LogId>,
     filter: Option<env_logger::filter::Filter>,
     tag: Option<CString>,
     custom_format: Option<FormatFn>,
@@ -290,12 +291,14 @@ impl Config {
         self
     }
 
-    /// Change which log buffer is used
+    /// Changes the Android logging system buffer to be used.
     ///
-    /// By default, logs are sent to the `Main` log. Other logging buffers may only be accessible
-    /// to certain processes.
-    pub fn with_log_id(mut self, log_id: LogId) -> Self {
-        self.log_id = Some(log_id);
+    /// By default, logs are sent to the [`Main`] log. Other logging buffers may
+    /// only be accessible to certain processes.
+    ///
+    /// [`Main`]: LogId::Main
+    pub fn with_log_buffer(mut self, buf_id: LogId) -> Self {
+        self.buf_id = Some(buf_id);
         self
     }
 
@@ -341,9 +344,9 @@ pub struct PlatformLogWriter<'a> {
     #[cfg(not(target_os = "android"))]
     priority: Level,
     #[cfg(target_os = "android")]
-    log_id: log_ffi::log_id_t,
+    buf_id: log_ffi::log_id_t,
     #[cfg(not(target_os = "android"))]
-    log_id: Option<LogId>,
+    buf_id: Option<LogId>,
     len: usize,
     last_newline_index: usize,
     tag: &'a CStr,
@@ -353,14 +356,14 @@ pub struct PlatformLogWriter<'a> {
 impl<'a> PlatformLogWriter<'a> {
     #[cfg(target_os = "android")]
     pub fn new_with_priority(
-        log_id: Option<LogId>,
+        buf_id: Option<LogId>,
         priority: log_ffi::LogPriority,
         tag: &CStr,
-    ) -> PlatformLogWriter {
+    ) -> PlatformLogWriter<'_> {
         #[allow(deprecated)] // created an issue #35 for this
-        PlatformLogWriter {
-            log_id: LogId::to_native(log_id),
+        Self {
             priority,
+            buf_id: LogId::to_native(buf_id),
             len: 0,
             last_newline_index: 0,
             tag,
@@ -369,9 +372,9 @@ impl<'a> PlatformLogWriter<'a> {
     }
 
     #[cfg(target_os = "android")]
-    pub fn new(log_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter {
+    pub fn new(buf_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter<'_> {
         Self::new_with_priority(
-            log_id,
+            buf_id,
             match level {
                 Level::Warn => LogPriority::WARN,
                 Level::Info => LogPriority::INFO,
@@ -384,11 +387,11 @@ impl<'a> PlatformLogWriter<'a> {
     }
 
     #[cfg(not(target_os = "android"))]
-    pub fn new(log_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter {
+    pub fn new(buf_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter<'_> {
         #[allow(deprecated)] // created an issue #35 for this
-        PlatformLogWriter {
+        Self {
             priority: level,
-            log_id,
+            buf_id,
             len: 0,
             last_newline_index: 0,
             tag,
@@ -444,8 +447,8 @@ impl<'a> PlatformLogWriter<'a> {
             self.buffer.get_unchecked_mut(len)
         });
 
-        let msg: &CStr = unsafe { CStr::from_ptr(mem::transmute(self.buffer.as_ptr())) };
-        android_log(self.log_id, self.priority, self.tag, msg);
+        let msg: &CStr = unsafe { CStr::from_ptr(self.buffer.as_ptr().cast()) };
+        android_log(self.buf_id, self.priority, self.tag, msg);
 
         unsafe { *self.buffer.get_unchecked_mut(len) = last_byte };
     }
@@ -550,11 +553,11 @@ mod tests {
         // Filter is checked in config_filter_match below.
         let config = Config::default()
             .with_max_level(LevelFilter::Trace)
-            .with_log_id(LogId::System)
+            .with_log_buffer(LogId::System)
             .with_tag("my_app");
 
         assert_eq!(config.log_level, Some(LevelFilter::Trace));
-        assert_eq!(config.log_id, Some(LogId::System));
+        assert_eq!(config.buf_id, Some(LogId::System));
         assert_eq!(config.tag, Some(CString::new("my_app").unwrap()));
     }
 
