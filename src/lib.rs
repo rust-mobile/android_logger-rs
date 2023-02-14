@@ -361,7 +361,7 @@ impl<'a> PlatformLogWriter<'a> {
         tag: &CStr,
     ) -> PlatformLogWriter<'_> {
         #[allow(deprecated)] // created an issue #35 for this
-        Self {
+        PlatformLogWriter {
             priority,
             buf_id: LogId::to_native(buf_id),
             len: 0,
@@ -373,7 +373,7 @@ impl<'a> PlatformLogWriter<'a> {
 
     #[cfg(target_os = "android")]
     pub fn new(buf_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter<'_> {
-        Self::new_with_priority(
+        PlatformLogWriter::new_with_priority(
             buf_id,
             match level {
                 Level::Warn => LogPriority::WARN,
@@ -389,7 +389,7 @@ impl<'a> PlatformLogWriter<'a> {
     #[cfg(not(target_os = "android"))]
     pub fn new(buf_id: Option<LogId>, level: Level, tag: &CStr) -> PlatformLogWriter<'_> {
         #[allow(deprecated)] // created an issue #35 for this
-        Self {
+        PlatformLogWriter {
             priority: level,
             buf_id,
             len: 0,
