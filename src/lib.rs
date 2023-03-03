@@ -118,32 +118,47 @@ pub enum LogId {
 
 #[cfg(target_os = "android")]
 impl LogId {
-    fn to_native(log_id: Option<Self>) -> log_ffi::log_id_t {
+    fn to_native(log_id: Option<Self>) -> Option<log_ffi::log_id_t> {
         match log_id {
-            Some(Self::Main) => log_ffi::log_id_t::MAIN,
-            Some(Self::Radio) => log_ffi::log_id_t::RADIO,
-            Some(Self::Events) => log_ffi::log_id_t::EVENTS,
-            Some(Self::System) => log_ffi::log_id_t::SYSTEM,
-            Some(Self::Crash) => log_ffi::log_id_t::CRASH,
-            Some(Self::Kernel) => log_ffi::log_id_t::KERNEL,
-            Some(Self::Security) => log_ffi::log_id_t::SECURITY,
-            Some(Self::Stats) => log_ffi::log_id_t::STATS,
-            None => log_ffi::log_id_t::DEFAULT,
+            Some(Self::Main) => Some(log_ffi::log_id_t::MAIN),
+            Some(Self::Radio) => Some(log_ffi::log_id_t::RADIO),
+            Some(Self::Events) => Some(log_ffi::log_id_t::EVENTS),
+            Some(Self::System) => Some(log_ffi::log_id_t::SYSTEM),
+            Some(Self::Crash) => Some(log_ffi::log_id_t::CRASH),
+            Some(Self::Kernel) => Some(log_ffi::log_id_t::KERNEL),
+            Some(Self::Security) => Some(log_ffi::log_id_t::SECURITY),
+            Some(Self::Stats) => Some(log_ffi::log_id_t::STATS),
+            None => None,
         }
     }
 }
 
 /// Outputs log to Android system.
 #[cfg(target_os = "android")]
-fn android_log(buf_id: log_ffi::log_id_t, prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
-    unsafe {
-        log_ffi::__android_log_buf_write(
-            buf_id as log_ffi::c_int,
-            prio as log_ffi::c_int,
-            tag.as_ptr() as *const log_ffi::c_char,
-            msg.as_ptr() as *const log_ffi::c_char,
-        );
-    };
+fn android_log(
+    buf_id: Option<log_ffi::log_id_t>,
+    prio: log_ffi::LogPriority,
+    tag: &CStr,
+    msg: &CStr,
+) {
+    if let Some(buf_id) = buf_id {
+        unsafe {
+            log_ffi::__android_log_buf_write(
+                buf_id as log_ffi::c_int,
+                prio as log_ffi::c_int,
+                tag.as_ptr() as *const log_ffi::c_char,
+                msg.as_ptr() as *const log_ffi::c_char,
+            );
+        };
+    } else {
+        unsafe {
+            log_ffi::__android_log_write(
+                prio as log_ffi::c_int,
+                tag.as_ptr() as *const log_ffi::c_char,
+                msg.as_ptr() as *const log_ffi::c_char,
+            );
+        };
+    }
 }
 
 /// Dummy output placeholder for tests.
@@ -337,7 +352,7 @@ pub struct PlatformLogWriter<'a> {
     #[cfg(not(target_os = "android"))]
     priority: Level,
     #[cfg(target_os = "android")]
-    buf_id: log_ffi::log_id_t,
+    buf_id: Option<log_ffi::log_id_t>,
     #[cfg(not(target_os = "android"))]
     buf_id: Option<LogId>,
     len: usize,
