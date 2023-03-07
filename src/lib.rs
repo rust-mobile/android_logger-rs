@@ -118,7 +118,7 @@ pub enum LogId {
 
 #[cfg(target_os = "android")]
 impl LogId {
-    fn to_native(log_id: Option<Self>) -> Option<log_ffi::log_id_t> {
+    const fn to_native(log_id: Option<Self>) -> Option<log_ffi::log_id_t> {
         match log_id {
             Some(Self::Main) => Some(log_ffi::log_id_t::MAIN),
             Some(Self::Radio) => Some(log_ffi::log_id_t::RADIO),
