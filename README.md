@@ -1,7 +1,7 @@
 ## Send Rust logs to Logcat
 
 [![Version](https://img.shields.io/crates/v/android_logger.svg)](https://crates.io/crates/android_logger)
-[![CI status](https://github.com/Nercury/android_logger-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Nercury/android_logger-rs/actions/workflows/ci.yml/)
+[![CI status](https://github.com/rust-mobile/android_logger-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rust-mobile/android_logger-rs/actions/workflows/ci.yml/)
 
 
 This library is a drop-in replacement for `env_logger`. Instead, it outputs messages to
