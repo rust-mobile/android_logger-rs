@@ -65,12 +65,7 @@
 
 #[cfg(target_os = "android")]
 extern crate android_log_sys as log_ffi;
-extern crate once_cell;
 use once_cell::sync::OnceCell;
-#[macro_use]
-extern crate log;
-
-extern crate env_logger;
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 #[cfg(target_os = "android")]
@@ -80,7 +75,7 @@ use std::fmt;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 
-pub use env_logger::filter::{Builder as FilterBuilder, Filter};
+pub use env_filter::{Builder as FilterBuilder, Filter};
 pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
@@ -280,7 +275,7 @@ impl AndroidLogger {
 pub struct Config {
     log_level: Option<LevelFilter>,
     buf_id: Option<LogId>,
-    filter: Option<env_logger::filter::Filter>,
+    filter: Option<env_filter::Filter>,
     tag: Option<CString>,
     custom_format: Option<FormatFn>,
 }
@@ -318,7 +313,7 @@ impl Config {
         }
     }
 
-    pub fn with_filter(mut self, filter: env_logger::filter::Filter) -> Self {
+    pub fn with_filter(mut self, filter: env_filter::Filter) -> Self {
         self.filter = Some(filter);
         self
     }
@@ -538,7 +533,7 @@ pub fn init_once(config: Config) {
     let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(config));
 
     if let Err(err) = log::set_logger(logger) {
-        debug!("android_logger: log::set_logger failed: {}", err);
+        log::debug!("android_logger: log::set_logger failed: {}", err);
     } else if let Some(level) = log_level {
         log::set_max_level(level);
     }
@@ -601,7 +596,7 @@ mod tests {
         let info_record = Record::builder().level(Level::Info).build();
         let debug_record = Record::builder().level(Level::Debug).build();
 
-        let info_all_filter = env_logger::filter::Builder::new().parse("info").build();
+        let info_all_filter = env_filter::Builder::new().parse("info").build();
         let info_all_config = Config::default().with_filter(info_all_filter);
 
         assert!(info_all_config.filter_matches(&info_record));
