@@ -65,7 +65,6 @@
 
 #[cfg(target_os = "android")]
 extern crate android_log_sys as log_ffi;
-use once_cell::sync::OnceCell;
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 #[cfg(target_os = "android")]
@@ -74,9 +73,9 @@ use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
+use std::sync::OnceLock;
 
 pub use env_filter::{Builder as FilterBuilder, Filter};
-pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
@@ -162,14 +161,14 @@ fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CSt
 
 /// Underlying android logger backend
 pub struct AndroidLogger {
-    config: OnceCell<Config>,
+    config: OnceLock<Config>,
 }
 
 impl AndroidLogger {
     /// Create new logger instance from config
     pub fn new(config: Config) -> AndroidLogger {
         AndroidLogger {
-            config: OnceCell::from(config),
+            config: OnceLock::from(config),
         }
     }
 
@@ -178,7 +177,7 @@ impl AndroidLogger {
     }
 }
 
-static ANDROID_LOGGER: OnceCell<AndroidLogger> = OnceCell::new();
+static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
@@ -187,7 +186,7 @@ impl Default for AndroidLogger {
     /// Create a new logger with default config
     fn default() -> AndroidLogger {
         AndroidLogger {
-            config: OnceCell::from(Config::default()),
+            config: OnceLock::from(Config::default()),
         }
     }
 }
