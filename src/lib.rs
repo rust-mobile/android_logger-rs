@@ -76,7 +76,6 @@ use std::ptr;
 use std::sync::OnceLock;
 
 pub use env_filter::{Builder as FilterBuilder, Filter};
-pub use env_logger::fmt::Formatter;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
