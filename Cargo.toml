@@ -16,11 +16,12 @@ edition = "2021"
 default = ["regex"]
 regex = ["env_filter/regex"]
 
-[dependencies]
-env_filter = "0.1.0"
-
 [dependencies.log]
 version = "0.4"
 
 [dependencies.android_log-sys]
 version = "0.3"
+
+[dependencies.env_filter]
+version = "0.1"
+default-features = false
