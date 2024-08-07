@@ -9,7 +9,7 @@ description = """
 A logging implementation for `log` which hooks to android log output.
 """
 keywords = ["android", "bindings", "log", "logger"]
-categories = ["api-bindings"]
+categories = ["api-bindings", "os::android-apis"]
 edition = "2021"
 
 [features]
