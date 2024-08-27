@@ -1,16 +1,21 @@
 #![cfg(feature = "log4rs")]
 
+use android_logger::AndroidLogger;
 use log::{debug, error, info, trace, warn, LevelFilter};
+use std::sync::OnceLock;
 
 #[test]
 fn test_log4rs() {
+    use android_logger::Config as AndroidConfig;
     use log4rs::append::console::ConsoleAppender;
     use log4rs::config::{Appender, Root};
     use log4rs::encode::pattern::PatternEncoder;
     use log4rs::Config;
-    use android_logger::Config as AndroidConfig;
 
-    let android_logger = android_logger::get_instance(AndroidConfig::default().with_max_level(LevelFilter::Trace));
+    static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
+    let android_logger = ANDROID_LOGGER.get_or_init(|| {
+        AndroidLogger::new(AndroidConfig::default().with_max_level(LevelFilter::Trace))
+    });
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{m}{n}")))
         .build();

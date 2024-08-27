@@ -544,14 +544,6 @@ pub fn init_once(config: Config) {
     }
 }
 
-/// Returns an instance of AndroidLogger for inclusion in an alternative logging configuration,
-/// such as when using `log4rs`.
-#[cfg(feature = "log4rs")]
-pub fn get_instance(config: Config) -> &'static AndroidLogger {
-    let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(config));
-    logger
-}
-
 // FIXME: When `maybe_uninit_uninit_array ` is stabilized, use it instead of this helper
 fn uninit_array<const N: usize, T>() -> [MaybeUninit<T>; N] {
     // SAFETY: Array contains MaybeUninit, which is fine to be uninit
