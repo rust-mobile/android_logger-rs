@@ -77,6 +77,9 @@ use std::sync::OnceLock;
 
 pub use env_filter::{Builder as FilterBuilder, Filter};
 
+#[cfg(feature = "log4rs")]
+use derivative::Derivative;
+
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
 /// Possible identifiers of a specific buffer of Android logging system for
@@ -160,7 +163,10 @@ fn android_log(
 fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
+#[cfg_attr(feature = "log4rs", derive(Derivative))]
+#[cfg_attr(feature = "log4rs", derivative(Debug))]
 pub struct AndroidLogger {
+    #[cfg_attr(feature = "log4rs", derivative(Debug = "ignore"))]
     config: OnceLock<Config>,
 }
 
@@ -536,6 +542,14 @@ pub fn init_once(config: Config) {
     } else if let Some(level) = log_level {
         log::set_max_level(level);
     }
+}
+
+/// Returns an instance of AndroidLogger for inclusion in an alternative logging configuration,
+/// such as when using `log4rs`.
+#[cfg(feature = "log4rs")]
+pub fn get_instance(config: Config) -> &'static AndroidLogger {
+    let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(config));
+    logger
 }
 
 // FIXME: When `maybe_uninit_uninit_array ` is stabilized, use it instead of this helper
