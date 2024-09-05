@@ -160,6 +160,7 @@ fn android_log(
 fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
+#[derive(Debug, Default)]
 pub struct AndroidLogger {
     config: OnceLock<Config>,
 }
@@ -181,15 +182,6 @@ static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
-
-impl Default for AndroidLogger {
-    /// Create a new logger with default config
-    fn default() -> AndroidLogger {
-        AndroidLogger {
-            config: OnceLock::from(Config::default()),
-        }
-    }
-}
 
 impl Log for AndroidLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -226,7 +218,7 @@ impl Log for AndroidLogger {
         // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
         self.fill_tag_bytes(&mut tag_bytes, tag);
         // use stack array as C string
-        let tag: &CStr = unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) };
+        let tag = unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) };
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
@@ -277,6 +269,24 @@ pub struct Config {
     filter: Option<env_filter::Filter>,
     tag: Option<CString>,
     custom_format: Option<FormatFn>,
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Config")
+            .field("log_level", &self.log_level)
+            .field("buf_id", &self.buf_id)
+            .field("filter", &self.filter)
+            .field("tag", &self.tag)
+            .field(
+                "custom_format",
+                match &self.custom_format {
+                    Some(_) => &"Some(_)",
+                    None => &"None",
+                },
+            )
+            .finish()
+    }
 }
 
 impl Config {
@@ -449,7 +459,7 @@ impl<'a> PlatformLogWriter<'a> {
             self.buffer.get_unchecked_mut(len)
         });
 
-        let msg: &CStr = unsafe { CStr::from_ptr(self.buffer.as_ptr().cast()) };
+        let msg = unsafe { CStr::from_ptr(self.buffer.as_ptr().cast()) };
         android_log(self.buf_id, self.priority, self.tag, msg);
 
         unsafe { *self.buffer.get_unchecked_mut(len) = last_byte };
