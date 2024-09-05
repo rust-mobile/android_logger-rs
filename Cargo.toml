@@ -12,6 +12,16 @@ keywords = ["android", "bindings", "log", "logger"]
 categories = ["api-bindings"]
 edition = "2021"
 
+[package.metadata.docs.rs]
+targets = [
+  "aarch64-linux-android",
+  "arm-linux-androideabi",
+  "armv7-linux-androideabi",
+  "i686-linux-android",
+  "thumbv7neon-linux-androideabi",
+  "x86_64-linux-android",
+]
+
 [features]
 default = ["regex"]
 regex = ["env_filter/regex"]
