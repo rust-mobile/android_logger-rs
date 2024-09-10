@@ -77,9 +77,6 @@ use std::sync::OnceLock;
 
 pub use env_filter::{Builder as FilterBuilder, Filter};
 
-#[cfg(feature = "log4rs")]
-use derivative::Derivative;
-
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
 /// Possible identifiers of a specific buffer of Android logging system for
@@ -163,13 +160,15 @@ fn android_log(
 fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
-#[cfg_attr(feature = "log4rs", derive(Derivative))]
-#[cfg_attr(feature = "log4rs", derivative(Debug))]
 pub struct AndroidLogger {
-    #[cfg_attr(feature = "log4rs", derivative(Debug = "ignore"))]
     config: OnceLock<Config>,
 }
 
+impl std::fmt::Debug for AndroidLogger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AndroidLogger").finish()
+    }
+}
 impl AndroidLogger {
     /// Create new logger instance from config
     pub fn new(config: Config) -> AndroidLogger {
