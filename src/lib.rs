@@ -227,10 +227,8 @@ impl Log for AndroidLogger {
         // In case we end up allocating, keep the CString alive.
         let _owned_tag;
         let tag: &CStr = if tag.len() < tag_bytes.len() {
-            // use stack array as C string
-            self.fill_tag_bytes(&mut tag_bytes, tag);
-            // SAFETY: fill_tag_bytes always puts a nullbyte in tag_bytes.
-            unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) }
+            // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
+            fill_tag_bytes(&mut tag_bytes, tag)
         } else {
             // Tag longer than available stack buffer; allocate.
             // We're using either
@@ -264,23 +262,38 @@ impl Log for AndroidLogger {
     fn flush(&self) {}
 }
 
-impl AndroidLogger {
-    fn fill_tag_bytes(&self, array: &mut [MaybeUninit<u8>], tag: &[u8]) {
-        if tag.len() > LOGGING_TAG_MAX_LEN {
-            for (input, output) in tag
-                .iter()
-                .take(LOGGING_TAG_MAX_LEN - 2)
-                .chain(b"..\0".iter())
-                .zip(array.iter_mut())
-            {
-                output.write(*input);
-            }
-        } else {
-            for (input, output) in tag.iter().chain(b"\0".iter()).zip(array.iter_mut()) {
-                output.write(*input);
-            }
+/// Fills up `storage` with `tag` and a necessary NUL terminator, optionally ellipsizing the input
+/// `tag` if it's too large.
+///
+/// Returns a [`CStr`] containing the initialized portion of `storage`, including its NUL
+/// terminator.
+fn fill_tag_bytes<'a>(
+    storage: &'a mut [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1],
+    tag: &[u8],
+) -> &'a CStr {
+    // FIXME: Simplify when maybe_uninit_fill with MaybeUninit::fill_from() is stabilized
+    let initialized = if tag.len() > LOGGING_TAG_MAX_LEN {
+        for (input, output) in tag
+            .iter()
+            // Elipsize the last two characters (TODO: use special … character)?
+            .take(LOGGING_TAG_MAX_LEN - 2)
+            .chain(b"..\0")
+            .zip(storage.iter_mut())
+        {
+            output.write(*input);
         }
-    }
+        storage.as_slice()
+    } else {
+        for (input, output) in tag.iter().chain(b"\0").zip(storage.iter_mut()) {
+            output.write(*input);
+        }
+        &storage[..tag.len() + 1]
+    };
+
+    // SAFETY: The above code ensures that `initialized` only refers to a portion of the `array`
+    // slice that was initialized, thus it is safe to cast those `MaybeUninit<u8>`s to `u8`:
+    let initialized = unsafe { slice_assume_init_ref(initialized) };
+    CStr::from_bytes_with_nul(initialized).expect("Unreachable: we wrote a nul terminator")
 }
 
 /// Filter for android logger.
@@ -369,7 +382,7 @@ pub struct PlatformLogWriter<'a> {
     buffer: [MaybeUninit<u8>; LOGGING_MSG_MAX_LEN + 1],
 }
 
-impl<'a> PlatformLogWriter<'a> {
+impl PlatformLogWriter<'_> {
     #[cfg(target_os = "android")]
     pub fn new_with_priority(
         buf_id: Option<LogId>,
@@ -432,11 +445,11 @@ impl<'a> PlatformLogWriter<'a> {
             let copy_from_index = self.last_newline_index;
             let remaining_chunk_len = total_len - copy_from_index;
 
-            self.output_specified_len(copy_from_index);
+            unsafe { self.output_specified_len(copy_from_index) };
             self.copy_bytes_to_start(copy_from_index, remaining_chunk_len);
             self.len = remaining_chunk_len;
         } else {
-            self.output_specified_len(total_len);
+            unsafe { self.output_specified_len(total_len) };
             self.len = 0;
         }
         self.last_newline_index = 0;
@@ -450,20 +463,26 @@ impl<'a> PlatformLogWriter<'a> {
             return;
         }
 
-        self.output_specified_len(total_len);
+        unsafe { self.output_specified_len(total_len) };
         self.len = 0;
         self.last_newline_index = 0;
     }
 
     /// Output buffer up until the \0 which will be placed at `len` position.
-    fn output_specified_len(&mut self, len: usize) {
+    ///
+    /// # Safety
+    /// The first `len` bytes of `self.buffer` must be initialized.
+    unsafe fn output_specified_len(&mut self, len: usize) {
         let mut last_byte = MaybeUninit::new(b'\0');
 
-        mem::swap(&mut last_byte, unsafe {
-            self.buffer.get_unchecked_mut(len)
-        });
+        mem::swap(
+            &mut last_byte,
+            self.buffer.get_mut(len).expect("`len` is out of bounds"),
+        );
 
-        let msg: &CStr = unsafe { CStr::from_ptr(self.buffer.as_ptr().cast()) };
+        let initialized = unsafe { slice_assume_init_ref(&self.buffer[..len + 1]) };
+        let msg = CStr::from_bytes_with_nul(initialized)
+            .expect("Unreachable: nul terminator was placed at `len`");
         android_log(self.buf_id, self.priority, self.tag, msg);
 
         unsafe { *self.buffer.get_unchecked_mut(len) = last_byte };
@@ -477,18 +496,18 @@ impl<'a> PlatformLogWriter<'a> {
     }
 }
 
-impl<'a> fmt::Write for PlatformLogWriter<'a> {
+impl fmt::Write for PlatformLogWriter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let mut incomming_bytes = s.as_bytes();
+        let mut incoming_bytes = s.as_bytes();
 
-        while !incomming_bytes.is_empty() {
+        while !incoming_bytes.is_empty() {
             let len = self.len;
 
             // write everything possible to buffer and mark last \n
-            let new_len = len + incomming_bytes.len();
+            let new_len = len + incoming_bytes.len();
             let last_newline = self.buffer[len..LOGGING_MSG_MAX_LEN]
                 .iter_mut()
-                .zip(incomming_bytes)
+                .zip(incoming_bytes)
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
                     output.write(*input);
@@ -517,7 +536,7 @@ impl<'a> fmt::Write for PlatformLogWriter<'a> {
                 LOGGING_MSG_MAX_LEN - len // written len
             };
 
-            incomming_bytes = &incomming_bytes[written_len..];
+            incoming_bytes = &incoming_bytes[written_len..];
         }
 
         Ok(())
@@ -556,6 +575,11 @@ pub fn init_once(config: Config) {
 fn uninit_array<const N: usize, T>() -> [MaybeUninit<T>; N] {
     // SAFETY: Array contains MaybeUninit, which is fine to be uninit
     unsafe { MaybeUninit::uninit().assume_init() }
+}
+
+// FIXME: Remove when maybe_uninit_slice is stabilized to provide MaybeUninit::slice_assume_init_ref()
+unsafe fn slice_assume_init_ref<T>(slice: &[MaybeUninit<T>]) -> &[T] {
+    &*(slice as *const [MaybeUninit<T>] as *const [T])
 }
 
 #[cfg(test)]
@@ -618,28 +642,26 @@ mod tests {
 
     #[test]
     fn fill_tag_bytes_truncates_long_tag() {
-        let logger = AndroidLogger::new(Config::default());
-        let too_long_tag: [u8; LOGGING_TAG_MAX_LEN + 20] = [b'a'; LOGGING_TAG_MAX_LEN + 20];
+        let too_long_tag = [b'a'; LOGGING_TAG_MAX_LEN + 20];
 
-        let mut result: [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1] = uninit_array();
-        logger.fill_tag_bytes(&mut result, &too_long_tag);
+        let mut result = uninit_array();
+        let tag = fill_tag_bytes(&mut result, &too_long_tag);
 
-        let mut expected_result = [b'a'; LOGGING_TAG_MAX_LEN - 2].to_vec();
+        let mut expected_result = vec![b'a'; LOGGING_TAG_MAX_LEN - 2];
         expected_result.extend("..\0".as_bytes());
-        assert_eq!(unsafe { assume_init_slice(&result) }, expected_result);
+        assert_eq!(tag.to_bytes_with_nul(), expected_result);
     }
 
     #[test]
     fn fill_tag_bytes_keeps_short_tag() {
-        let logger = AndroidLogger::new(Config::default());
-        let short_tag: [u8; 3] = [b'a'; 3];
+        let short_tag = [b'a'; 3];
 
-        let mut result: [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1] = uninit_array();
-        logger.fill_tag_bytes(&mut result, &short_tag);
+        let mut result = uninit_array();
+        let tag = fill_tag_bytes(&mut result, &short_tag);
 
         let mut expected_result = short_tag.to_vec();
         expected_result.push(0);
-        assert_eq!(unsafe { assume_init_slice(&result[..4]) }, expected_result);
+        assert_eq!(tag.to_bytes_with_nul(), expected_result);
     }
 
     #[test]
@@ -668,7 +690,7 @@ mod tests {
         assert_eq!(writer.len, 3);
         assert_eq!(writer.last_newline_index, 0);
         assert_eq!(
-            unsafe { assume_init_slice(&writer.buffer[..writer.len]) },
+            unsafe { slice_assume_init_ref(&writer.buffer[..writer.len]) },
             "\n90".as_bytes()
         );
 
@@ -710,10 +732,10 @@ mod tests {
             .write_str(log_string)
             .expect("Unable to write to PlatformLogWriter");
 
-        writer.output_specified_len(5);
+        unsafe { writer.output_specified_len(5) };
 
         assert_eq!(
-            unsafe { assume_init_slice(&writer.buffer[..log_string.len()]) },
+            unsafe { slice_assume_init_ref(&writer.buffer[..log_string.len()]) },
             log_string.as_bytes()
         );
     }
@@ -728,7 +750,7 @@ mod tests {
         writer.copy_bytes_to_start(3, 2);
 
         assert_eq!(
-            unsafe { assume_init_slice(&writer.buffer[..10]) },
+            unsafe { slice_assume_init_ref(&writer.buffer[..10]) },
             "3423456789".as_bytes()
         );
     }
@@ -745,7 +767,7 @@ mod tests {
         writer.copy_bytes_to_start(10, 0);
 
         assert_eq!(
-            unsafe { assume_init_slice(&writer.buffer[..test_string.len()]) },
+            unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
             test_string.as_bytes()
         );
     }
@@ -756,9 +778,5 @@ mod tests {
             Level::Warn,
             CStr::from_bytes_with_nul(b"tag\0").unwrap(),
         )
-    }
-
-    unsafe fn assume_init_slice<T>(slice: &[MaybeUninit<T>]) -> &[T] {
-        &*(slice as *const [MaybeUninit<T>] as *const [T])
     }
 }
