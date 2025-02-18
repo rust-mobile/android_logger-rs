@@ -179,7 +179,7 @@ impl AndroidLogger {
 
 static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
-const LOGGING_TAG_MAX_LEN: usize = 23;
+const LOGGING_TAG_MAX_LEN: usize = 128;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Default for AndroidLogger {
@@ -223,10 +223,20 @@ impl Log for AndroidLogger {
             .map(|s| s.as_bytes())
             .unwrap_or_else(|| module_path.as_bytes());
 
-        // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
-        self.fill_tag_bytes(&mut tag_bytes, tag);
-        // use stack array as C string
-        let tag: &CStr = unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) };
+        // In case we end up allocating, keep the CString alive.
+        let mut _owned_tag = None;
+        let tag: &CStr = if tag.len() < tag_bytes.len() {
+            // use stack array as C string
+            self.fill_tag_bytes(&mut tag_bytes, tag);
+            // SAFETY: fill_tag_bytes always puts a nullbyte in tag_bytes.
+            unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) }
+        } else {
+            // Tag longer than available stack buffer; allocate.
+            // SAFETY: if tag contains nullbytes, the Android logger will just ignore any
+            // characters that follow it.
+            _owned_tag = Some(unsafe { CString::from_vec_unchecked(tag.to_vec()) });
+            _owned_tag.as_ref().unwrap()
+        };
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
