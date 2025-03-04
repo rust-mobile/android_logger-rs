@@ -34,7 +34,9 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
+          components: rustfmt
 
+      - run: cargo fmt --check
       - run: cargo build --target=${{ matrix.target }}
       - run: cargo doc --target=${{ matrix.target }}
       # Temporary test non-target only.

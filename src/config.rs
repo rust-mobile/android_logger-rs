@@ -20,10 +20,13 @@ impl fmt::Debug for Config {
             .field("buf_id", &self.buf_id)
             .field("filter", &self.filter)
             .field("tag", &self.tag)
-            .field("custom_format", match &self.custom_format {
-                Some(_) => &"Some(_)",
-                None => &"None",
-            })
+            .field(
+                "custom_format",
+                match &self.custom_format {
+                    Some(_) => &"Some(_)",
+                    None => &"None",
+                },
+            )
             .finish()
     }
 }
