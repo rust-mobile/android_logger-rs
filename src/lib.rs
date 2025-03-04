@@ -160,6 +160,7 @@ fn android_log(
 fn android_log(_buf_id: Option<LogId>, _priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
+#[derive(Debug, Default)]
 pub struct AndroidLogger {
     config: OnceLock<Config>,
 }
@@ -182,15 +183,6 @@ static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 // Maximum length of a tag that does not require allocation.
 const LOGGING_TAG_MAX_LEN: usize = 127;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
-
-impl Default for AndroidLogger {
-    /// Create a new logger with default config
-    fn default() -> AndroidLogger {
-        AndroidLogger {
-            config: OnceLock::from(Config::default()),
-        }
-    }
-}
 
 impl Log for AndroidLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -226,7 +218,7 @@ impl Log for AndroidLogger {
 
         // In case we end up allocating, keep the CString alive.
         let _owned_tag;
-        let tag: &CStr = if tag.len() < tag_bytes.len() {
+        let tag = if tag.len() < tag_bytes.len() {
             // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
             fill_tag_bytes(&mut tag_bytes, tag)
         } else {
@@ -304,6 +296,24 @@ pub struct Config {
     filter: Option<env_filter::Filter>,
     tag: Option<CString>,
     custom_format: Option<FormatFn>,
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Config")
+            .field("log_level", &self.log_level)
+            .field("buf_id", &self.buf_id)
+            .field("filter", &self.filter)
+            .field("tag", &self.tag)
+            .field(
+                "custom_format",
+                match &self.custom_format {
+                    Some(_) => &"Some(_)",
+                    None => &"None",
+                },
+            )
+            .finish()
+    }
 }
 
 impl Config {
