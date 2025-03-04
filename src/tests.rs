@@ -1,6 +1,6 @@
 use super::*;
-use std::sync::atomic::{AtomicBool, Ordering};
 use log::LevelFilter;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn check_config_values() {

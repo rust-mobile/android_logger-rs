@@ -1,8 +1,8 @@
+use crate::LOGGING_TAG_MAX_LEN;
 use std::ffi::CStr;
 use std::mem::MaybeUninit;
-use crate::LOGGING_TAG_MAX_LEN;
 
-// FIXME: When `maybe_uninit_uninit_array ` is stabilized, use it instead of this helper
+// FIXME: When `maybe_uninit_uninit_array` is stabilized, use it instead of this helper
 pub fn uninit_array<const N: usize, T>() -> [MaybeUninit<T>; N] {
     // SAFETY: Array contains MaybeUninit, which is fine to be uninit
     unsafe { MaybeUninit::uninit().assume_init() }

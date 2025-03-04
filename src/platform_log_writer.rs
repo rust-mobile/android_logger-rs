@@ -1,11 +1,11 @@
-use std::ffi::CStr;
-use std::{fmt, mem, ptr};
-use std::mem::MaybeUninit;
+use crate::arrays::slice_assume_init_ref;
+use crate::{LOGGING_MSG_MAX_LEN, LogId, android_log, uninit_array};
 use log::Level;
 #[cfg(target_os = "android")]
 use log_ffi::LogPriority;
-use crate::{android_log, uninit_array, LogId, LOGGING_MSG_MAX_LEN};
-use crate::arrays::slice_assume_init_ref;
+use std::ffi::CStr;
+use std::mem::MaybeUninit;
+use std::{fmt, mem, ptr};
 
 /// The purpose of this "writer" is to split logged messages on whitespace when the log message
 /// length exceeds the maximum. Without allocations.
@@ -153,11 +153,7 @@ impl fmt::Write for PlatformLogWriter<'_> {
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
                     output.write(*input);
-                    if *input == b'\n' {
-                        Some(i)
-                    } else {
-                        acc
-                    }
+                    if *input == b'\n' { Some(i) } else { acc }
                 });
 
             // update last \n index
@@ -187,11 +183,11 @@ impl fmt::Write for PlatformLogWriter<'_> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::ffi::CStr;
-    use std::fmt::Write;
-    use log::Level;
     use crate::arrays::slice_assume_init_ref;
     use crate::platform_log_writer::PlatformLogWriter;
+    use log::Level;
+    use std::ffi::CStr;
+    use std::fmt::Write;
 
     #[test]
     fn platform_log_writer_init_values() {

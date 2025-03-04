@@ -69,23 +69,23 @@ extern crate android_log_sys as log_ffi;
 use log::{Log, Metadata, Record};
 use std::ffi::{CStr, CString};
 use std::fmt;
-use std::mem::{MaybeUninit};
+use std::mem::MaybeUninit;
 use std::sync::OnceLock;
 
-pub use env_filter::{Builder as FilterBuilder, Filter};
-pub use config::{Config};
-pub use id::{LogId};
 use crate::arrays::{fill_tag_bytes, uninit_array};
 use crate::platform_log_writer::PlatformLogWriter;
+pub use config::Config;
+pub use env_filter::{Builder as FilterBuilder, Filter};
+pub use id::LogId;
 
 pub(crate) type FormatFn = Box<dyn Fn(&mut dyn fmt::Write, &Record) -> fmt::Result + Sync + Send>;
 
+mod arrays;
 mod config;
 mod id;
+mod platform_log_writer;
 #[cfg(test)]
 mod tests;
-mod platform_log_writer;
-mod arrays;
 
 /// Outputs log to Android system.
 #[cfg(target_os = "android")]
