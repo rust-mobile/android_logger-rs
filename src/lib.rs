@@ -179,7 +179,8 @@ impl AndroidLogger {
 
 static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
-const LOGGING_TAG_MAX_LEN: usize = 128;
+// Maximum length of a tag that does not require allocation.
+const LOGGING_TAG_MAX_LEN: usize = 127;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Default for AndroidLogger {
@@ -211,7 +212,7 @@ impl Log for AndroidLogger {
             return;
         }
 
-        // tag must not exceed LOGGING_TAG_MAX_LEN
+        // tag longer than LOGGING_TAG_MAX_LEN causes allocation
         let mut tag_bytes: [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1] = uninit_array();
 
         let module_path = record.module_path().unwrap_or_default().to_owned();
