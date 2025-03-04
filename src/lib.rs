@@ -179,7 +179,8 @@ impl AndroidLogger {
 
 static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
-const LOGGING_TAG_MAX_LEN: usize = 23;
+// Maximum length of a tag that does not require allocation.
+const LOGGING_TAG_MAX_LEN: usize = 127;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Default for AndroidLogger {
@@ -211,10 +212,10 @@ impl Log for AndroidLogger {
             return;
         }
 
-        // tag must not exceed LOGGING_TAG_MAX_LEN
+        // tag longer than LOGGING_TAG_MAX_LEN causes allocation
         let mut tag_bytes: [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1] = uninit_array();
 
-        let module_path = record.module_path().unwrap_or_default().to_owned();
+        let module_path = record.module_path().unwrap_or_default();
 
         // If no tag was specified, use module name
         let custom_tag = &config.tag;
@@ -223,10 +224,23 @@ impl Log for AndroidLogger {
             .map(|s| s.as_bytes())
             .unwrap_or_else(|| module_path.as_bytes());
 
-        // truncate the tag here to fit into LOGGING_TAG_MAX_LEN
-        self.fill_tag_bytes(&mut tag_bytes, tag);
-        // use stack array as C string
-        let tag: &CStr = unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) };
+        // In case we end up allocating, keep the CString alive.
+        let _owned_tag;
+        let tag: &CStr = if tag.len() < tag_bytes.len() {
+            // use stack array as C string
+            self.fill_tag_bytes(&mut tag_bytes, tag);
+            // SAFETY: fill_tag_bytes always puts a nullbyte in tag_bytes.
+            unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) }
+        } else {
+            // Tag longer than available stack buffer; allocate.
+            // We're using either
+            // - CString::as_bytes on config.tag, or
+            // - str::as_bytes on record.module_path()
+            // Neither of those include the terminating nullbyte.
+            _owned_tag = CString::new(tag)
+                .expect("config.tag or record.module_path() should never contain nullbytes");
+            _owned_tag.as_ref()
+        };
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
