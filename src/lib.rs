@@ -215,7 +215,7 @@ impl Log for AndroidLogger {
         // tag longer than LOGGING_TAG_MAX_LEN causes allocation
         let mut tag_bytes: [MaybeUninit<u8>; LOGGING_TAG_MAX_LEN + 1] = uninit_array();
 
-        let module_path = record.module_path().unwrap_or_default().to_owned();
+        let module_path = record.module_path().unwrap_or_default();
 
         // If no tag was specified, use module name
         let custom_tag = &config.tag;
@@ -225,7 +225,7 @@ impl Log for AndroidLogger {
             .unwrap_or_else(|| module_path.as_bytes());
 
         // In case we end up allocating, keep the CString alive.
-        let mut _owned_tag = None;
+        let _owned_tag;
         let tag: &CStr = if tag.len() < tag_bytes.len() {
             // use stack array as C string
             self.fill_tag_bytes(&mut tag_bytes, tag);
@@ -233,10 +233,13 @@ impl Log for AndroidLogger {
             unsafe { CStr::from_ptr(mem::transmute(tag_bytes.as_ptr())) }
         } else {
             // Tag longer than available stack buffer; allocate.
-            // SAFETY: if tag contains nullbytes, the Android logger will just ignore any
-            // characters that follow it.
-            _owned_tag = Some(unsafe { CString::from_vec_unchecked(tag.to_vec()) });
-            _owned_tag.as_ref().unwrap()
+            // We're using either
+            // - CString::as_bytes on config.tag, or
+            // - str::as_bytes on record.module_path()
+            // Neither of those include the terminating nullbyte.
+            _owned_tag = CString::new(tag)
+                .expect("config.tag or record.module_path() should never contain nullbytes");
+            _owned_tag.as_ref()
         };
 
         // message must not exceed LOGGING_MSG_MAX_LEN
