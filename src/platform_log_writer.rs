@@ -1,5 +1,5 @@
 use crate::arrays::slice_assume_init_ref;
-use crate::{android_log, uninit_array, LogId, LOGGING_MSG_MAX_LEN};
+use crate::{LOGGING_MSG_MAX_LEN, LogId, android_log, uninit_array};
 use log::Level;
 #[cfg(target_os = "android")]
 use log_ffi::LogPriority;
@@ -153,11 +153,7 @@ impl fmt::Write for PlatformLogWriter<'_> {
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
                     output.write(*input);
-                    if *input == b'\n' {
-                        Some(i)
-                    } else {
-                        acc
-                    }
+                    if *input == b'\n' { Some(i) } else { acc }
                 });
 
             // update last \n index
