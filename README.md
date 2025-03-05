@@ -68,7 +68,7 @@ by efficiently splitting messages into chunks.
 ## Consistent log filtering in mixed Rust/C/C++ apps
 
 Android's C logging API determines the effective log level based on [a
-combination](https://cs.android.com/android/platform/superproject/main/+/main:system/logging/liblog/properties.cpp;l=243;drc=b74a506c1b69f5b295a8cdfd7e2da3b16db15934),
+combination](https://cs.android.com/android/platform/superproject/main/+/main:system/logging/liblog/properties.cpp;l=243;drc=b74a506c1b69f5b295a8cdfd7e2da3b16db15934)
 of a process-wide global variable, [system-wide
 properties](https://cs.android.com/android/platform/superproject/main/+/main:system/logging/logd/README.property;l=45;drc=99c545d3098018a544cb292e1501daca694bee0f),
 and call-specific default. `log` + `android_logger` crates add another layer of
@@ -102,7 +102,7 @@ and Rust calls.
 
 If you build `android_logger` with `android-api-30` feature enabled, the logger
 will consider the process-wide global state (set via
-[`__android_log_set_minimum_priority`](https://cs.android.com/android/platform/superproject/main/+/main:prebuilts/runtime/mainline/runtime/sdk/common_os/include/system/logging/liblog/include/android/log.h;l=364;drc=4cf460634134d51dba174f8af60dffb10f703f51)
+[`__android_log_set_minimum_priority`](https://cs.android.com/android/platform/superproject/main/+/main:prebuilts/runtime/mainline/runtime/sdk/common_os/include/system/logging/liblog/include/android/log.h;l=364;drc=4cf460634134d51dba174f8af60dffb10f703f51))
 and Android system properties when deciding if a message should be logged or
 not. In this case, the effective log level is the _least verbose_ of the levels
 set between those and Rust log facilities.
