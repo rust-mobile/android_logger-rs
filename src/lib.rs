@@ -178,15 +178,13 @@ impl Log for AndroidLogger {
 
         let tag: &CStr = if let Some(ref tag) = config.tag {
             tag
+        } else if module_path.len() < tag_bytes.len() {
+            fill_tag_bytes(&mut tag_bytes, module_path.as_bytes())
         } else {
-            if module_path.len() < tag_bytes.len() {
-                fill_tag_bytes(&mut tag_bytes, module_path.as_bytes())
-            } else {
-                // Tag longer than available stack buffer; allocate.
-                _owned_tag = CString::new(module_path.as_bytes())
-                    .expect("record.module_path() shouldn't contain nullbytes");
-                _owned_tag.as_ref()
-            }
+            // Tag longer than available stack buffer; allocate.
+            _owned_tag = CString::new(module_path.as_bytes())
+                .expect("record.module_path() shouldn't contain nullbytes");
+            _owned_tag.as_ref()
         };
 
         // message must not exceed LOGGING_MSG_MAX_LEN
