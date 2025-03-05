@@ -31,6 +31,56 @@ impl fmt::Debug for Config {
     }
 }
 
+#[cfg(all(target_os = "android", feature = "android-api-30"))]
+fn android_log_priority_from_level(level: Level) -> android_log_sys::LogPriority {
+    match level {
+        Level::Warn => android_log_sys::LogPriority::WARN,
+        Level::Info => android_log_sys::LogPriority::INFO,
+        Level::Debug => android_log_sys::LogPriority::DEBUG,
+        Level::Error => android_log_sys::LogPriority::ERROR,
+        Level::Trace => android_log_sys::LogPriority::VERBOSE,
+    }
+}
+
+/// Asks Android liblog if a message with given `tag` and `priority` should be logged, using
+/// `default_prio` as the level filter in case no system- or process-wide overrides are set.
+#[cfg(all(target_os = "android", feature = "android-api-30"))]
+fn android_is_loggable_len(
+    prio: log_ffi::LogPriority,
+    tag: &str,
+    default_prio: log_ffi::LogPriority,
+) -> bool {
+    // SAFETY: tag points to a valid string tag.len() bytes long.
+    unsafe {
+        log_ffi::__android_log_is_loggable_len(
+            prio as log_ffi::c_int,
+            tag.as_ptr() as *const log_ffi::c_char,
+            tag.len() as log_ffi::c_size_t,
+            default_prio as log_ffi::c_int,
+        ) != 0
+    }
+}
+
+#[cfg(not(all(target_os = "android", feature = "android-api-30")))]
+fn default_is_loggable(_tag: &str, record_level: Level, config_level: Option<LevelFilter>) -> bool {
+    record_level <= config_level.unwrap_or_else(log::max_level)
+}
+
+#[cfg(all(target_os = "android", feature = "android-api-30"))]
+fn android_is_loggable(tag: &str, record_level: Level, config_level: Option<LevelFilter>) -> bool {
+    let prio = android_log_priority_from_level(record_level);
+    // Priority to use in case no system-wide or process-wide overrides are set.
+    let default_prio = match config_level {
+        Some(level_filter) => match level_filter.to_level() {
+            Some(level) => android_log_priority_from_level(level),
+            // LevelFilter::to_level() returns None only for LevelFilter::Off
+            None => android_log_sys::LogPriority::SILENT,
+        },
+        None => android_log_sys::LogPriority::INFO,
+    };
+    android_is_loggable_len(prio, tag, default_prio)
+}
+
 impl Config {
     /// Changes the maximum log level.
     ///
@@ -64,9 +114,13 @@ impl Config {
         }
     }
 
-    pub(crate) fn is_loggable(&self, level: Level) -> bool {
-        // todo: consider __android_log_is_loggable.
-        level <= self.log_level.unwrap_or_else(log::max_level)
+    pub(crate) fn is_loggable(&self, tag: &str, level: Level) -> bool {
+        #[cfg(all(target_os = "android", feature = "android-api-30"))]
+        use android_is_loggable as is_loggable;
+        #[cfg(not(all(target_os = "android", feature = "android-api-30")))]
+        use default_is_loggable as is_loggable;
+
+        is_loggable(tag, level, self.log_level)
     }
 
     pub fn with_filter(mut self, filter: env_filter::Filter) -> Self {

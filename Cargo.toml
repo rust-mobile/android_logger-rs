@@ -25,12 +25,13 @@ targets = [
 [features]
 default = ["regex"]
 regex = ["env_filter/regex"]
+android-api-30 = []
 
 [dependencies.log]
 version = "0.4"
 
 [dependencies.android_log-sys]
-version = "0.3"
+version = "0.3.2"
 
 [dependencies.env_filter]
 version = "0.1"

@@ -26,6 +26,10 @@ jobs:
           - armv7-linux-androideabi
           - aarch64-linux-android
           - i686-linux-android
+        features:
+          - ""
+          - --no-default-features
+          - --all-features
 
     steps:
       - uses: actions/checkout@v3
@@ -37,9 +41,9 @@ jobs:
           components: rustfmt, clippy
 
       - run: cargo fmt --check
-      - run: cargo clippy --target=${{ matrix.target }} -- -Dwarnings
-      - run: cargo build --target=${{ matrix.target }}
-      - run: cargo doc --target=${{ matrix.target }}
+      - run: cargo clippy --target=${{ matrix.target }} ${{ matrix.features }} -- -Dwarnings
+      - run: cargo build --target=${{ matrix.target }} ${{ matrix.features }}
+      - run: cargo doc --target=${{ matrix.target }} ${{ matrix.features }}
         env:
           RUSTDOCFLAGS: -Dwarnings
       # Temporary test non-target only.

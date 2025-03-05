@@ -146,7 +146,8 @@ const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Log for AndroidLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        self.config().is_loggable(metadata.level())
+        self.config()
+            .is_loggable(metadata.target(), metadata.level())
     }
 
     fn log(&self, record: &Record) {
