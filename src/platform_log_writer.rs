@@ -191,7 +191,7 @@ pub mod tests {
 
     #[test]
     fn platform_log_writer_init_values() {
-        let tag = c"tag";
+        let tag = CStr::from_bytes_with_nul(b"tag\0").unwrap();
 
         let writer = PlatformLogWriter::new(None, Level::Warn, tag);
 
@@ -301,7 +301,7 @@ pub mod tests {
         PlatformLogWriter::new(
             None,
             Level::Warn,
-            c"tag",
+            CStr::from_bytes_with_nul(b"tag\0").unwrap(),
         )
     }
 }

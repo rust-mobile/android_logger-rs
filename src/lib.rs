@@ -176,7 +176,7 @@ impl Log for AndroidLogger {
 
         let module_path = record.module_path().unwrap_or_default();
 
-        let tag: &CStr = if let Some(ref tag) = config.tag {
+        let tag = if let Some(tag) = &config.tag {
             tag
         } else if module_path.len() < tag_bytes.len() {
             fill_tag_bytes(&mut tag_bytes, module_path.as_bytes())
