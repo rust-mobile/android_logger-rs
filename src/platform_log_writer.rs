@@ -123,7 +123,7 @@ impl PlatformLogWriter<'_> {
         );
 
         let initialized = unsafe { slice_assume_init_ref(&self.buffer[..len + 1]) };
-        let msg = CStr::from_bytes_with_nul(initialized)
+        let msg = CStr::from_bytes_until_nul(initialized)
             .expect("Unreachable: nul terminator was placed at `len`");
         android_log(self.buf_id, self.priority, self.tag, msg);
 
@@ -262,6 +262,23 @@ pub mod tests {
         assert_eq!(
             unsafe { slice_assume_init_ref(&writer.buffer[..log_string.len()]) },
             log_string.as_bytes()
+        );
+    }
+
+    #[test]
+    fn output_specified_len_accepts_extra_trailing_nuls() {
+        let mut writer = get_tag_writer();
+        let log_string = "abcde\0\0\0";
+        let first_nul = log_string.find('\0').unwrap();
+        writer
+            .write_str(log_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        unsafe { writer.output_specified_len(8) };
+
+        assert_eq!(
+            unsafe { slice_assume_init_ref(&writer.buffer[..first_nul]) },
+            &log_string.as_bytes()[..first_nul]
         );
     }
 
