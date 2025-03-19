@@ -113,7 +113,7 @@ impl PlatformLogWriter<'_> {
     /// Output buffer up until the \0 which will be placed at `len` position.
     ///
     /// # Safety
-    /// The first `len` bytes of `self.buffer` must be initialized.
+    /// The first `len` bytes of `self.buffer` must be initialized and not contain nullbytes.
     unsafe fn output_specified_len(&mut self, len: usize) {
         let mut last_byte = MaybeUninit::new(b'\0');
 
@@ -123,7 +123,7 @@ impl PlatformLogWriter<'_> {
         );
 
         let initialized = unsafe { slice_assume_init_ref(&self.buffer[..len + 1]) };
-        let msg = CStr::from_bytes_until_nul(initialized)
+        let msg = CStr::from_bytes_with_nul(initialized)
             .expect("Unreachable: nul terminator was placed at `len`");
         android_log(self.buf_id, self.priority, self.tag, msg);
 
@@ -152,7 +152,13 @@ impl fmt::Write for PlatformLogWriter<'_> {
                 .zip(incoming_bytes)
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
-                    output.write(*input);
+                    if *input == b'\0' {
+                        // Replace nullbytes with whitespace, so we can put the message in a CStr
+                        // later to pass it through a const char*.
+                        output.write(b' ');
+                    } else {
+                        output.write(*input);
+                    }
                     if *input == b'\n' { Some(i) } else { acc }
                 });
 
@@ -266,23 +272,6 @@ pub mod tests {
     }
 
     #[test]
-    fn output_specified_len_accepts_extra_trailing_nuls() {
-        let mut writer = get_tag_writer();
-        let log_string = "abcde\0\0\0";
-        let first_nul = log_string.find('\0').unwrap();
-        writer
-            .write_str(log_string)
-            .expect("Unable to write to PlatformLogWriter");
-
-        unsafe { writer.output_specified_len(8) };
-
-        assert_eq!(
-            unsafe { slice_assume_init_ref(&writer.buffer[..first_nul]) },
-            &log_string.as_bytes()[..first_nul]
-        );
-    }
-
-    #[test]
     fn copy_bytes_to_start() {
         let mut writer = get_tag_writer();
         writer
@@ -311,6 +300,20 @@ pub mod tests {
         assert_eq!(
             unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
             test_string.as_bytes()
+        );
+    }
+
+    #[test]
+    fn writer_substitutes_nullbytes_with_spaces() {
+        let test_string = "Test_string_with\0\0\0\0nullbytes\0";
+        let mut writer = get_tag_writer();
+        writer
+            .write_str(test_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        assert_eq!(
+            unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
+            test_string.replace("\0", " ").as_bytes()
         );
     }
 
