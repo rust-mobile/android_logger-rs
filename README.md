@@ -105,7 +105,8 @@ will consider the process-wide global state (set via
 [`__android_log_set_minimum_priority`](https://cs.android.com/android/platform/superproject/main/+/main:prebuilts/runtime/mainline/runtime/sdk/common_os/include/system/logging/liblog/include/android/log.h;l=364;drc=4cf460634134d51dba174f8af60dffb10f703f51))
 and Android system properties when deciding if a message should be logged or
 not. In this case, the effective log level is the _least verbose_ of the levels
-set between those and Rust log facilities.
+set between those and [Rust log
+facilities](https://docs.rs/log/latest/log/fn.set_max_level.html).
 
 ## License
 
