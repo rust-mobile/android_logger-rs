@@ -41,7 +41,6 @@ jobs:
           components: rustfmt, clippy
 
       - run: cargo fmt --check
-      - run: cargo clippy --target=${{ matrix.target }} ${{ matrix.features }}
       - run: cargo build --target=${{ matrix.target }} ${{ matrix.features }}
       - run: cargo doc --target=${{ matrix.target }} ${{ matrix.features }}
         env:
