@@ -113,7 +113,7 @@ impl PlatformLogWriter<'_> {
     /// Output buffer up until the \0 which will be placed at `len` position.
     ///
     /// # Safety
-    /// The first `len` bytes of `self.buffer` must be initialized.
+    /// The first `len` bytes of `self.buffer` must be initialized and not contain nullbytes.
     unsafe fn output_specified_len(&mut self, len: usize) {
         let mut last_byte = MaybeUninit::new(b'\0');
 
@@ -152,7 +152,13 @@ impl fmt::Write for PlatformLogWriter<'_> {
                 .zip(incoming_bytes)
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
-                    output.write(*input);
+                    if *input == b'\0' {
+                        // Replace nullbytes with whitespace, so we can put the message in a CStr
+                        // later to pass it through a const char*.
+                        output.write(b' ');
+                    } else {
+                        output.write(*input);
+                    }
                     if *input == b'\n' { Some(i) } else { acc }
                 });
 
@@ -294,6 +300,20 @@ pub mod tests {
         assert_eq!(
             unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
             test_string.as_bytes()
+        );
+    }
+
+    #[test]
+    fn writer_substitutes_nullbytes_with_spaces() {
+        let test_string = "Test_string_with\0\0\0\0nullbytes\0";
+        let mut writer = get_tag_writer();
+        writer
+            .write_str(test_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        assert_eq!(
+            unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
+            test_string.replace("\0", " ").as_bytes()
         );
     }
 
