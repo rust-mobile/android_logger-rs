@@ -68,16 +68,16 @@
 //! ```
 
 fn main() {
+    todo!("This test and its comments are no longer true after with_max_level is removed");
     android_logger::init_once(
-        android_logger::Config::default()
-            .with_tag("log_test")
-            // If set, this is the highest level to log unless overriddeby by the system.
-            // Note the verbosity can be *increased* through system properties.
-            .with_max_level(log::LevelFilter::Info),
+        android_logger::Config::default().with_tag("log_test"),
+        // If set, this is the highest level to log unless overridden by by the system.
+        // Note the verbosity can be *increased* through system properties.
+        // .with_max_level(log::LevelFilter::Info),
     );
     // The log crate applies its filtering before we even get to android_logger.
     // Pass everything down so that Android's liblog can determine the log level instead.
-    log::set_max_level(log::LevelFilter::Trace);
+    // log::set_max_level(log::LevelFilter::Trace);
 
     log::trace!("trace");
     log::debug!("debug");

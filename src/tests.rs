@@ -1,16 +1,13 @@
 use super::*;
-use log::LevelFilter;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn check_config_values() {
     // Filter is checked in config_filter_match below.
     let config = Config::default()
-        .with_max_level(LevelFilter::Trace)
         .with_log_buffer(LogId::System)
         .with_tag("my_app");
 
-    assert_eq!(config.log_level, Some(LevelFilter::Trace));
     assert_eq!(config.buf_id, Some(LogId::System));
     assert_eq!(config.tag, Some(CString::new("my_app").unwrap()));
 }
@@ -18,12 +15,10 @@ fn check_config_values() {
 #[test]
 fn log_calls_formatter() {
     static FORMAT_FN_WAS_CALLED: AtomicBool = AtomicBool::new(false);
-    let config = Config::default()
-        .with_max_level(LevelFilter::Info)
-        .format(|_, _| {
-            FORMAT_FN_WAS_CALLED.store(true, Ordering::SeqCst);
-            Ok(())
-        });
+    let config = Config::default().format(|_, _| {
+        FORMAT_FN_WAS_CALLED.store(true, Ordering::SeqCst);
+        Ok(())
+    });
     let logger = AndroidLogger::new(config);
 
     logger.log(&Record::builder().level(log::Level::Info).build());
@@ -31,14 +26,22 @@ fn log_calls_formatter() {
     assert!(FORMAT_FN_WAS_CALLED.load(Ordering::SeqCst));
 }
 
-#[test]
-fn logger_enabled_threshold() {
-    let logger = AndroidLogger::new(Config::default().with_max_level(LevelFilter::Info));
+// TODO: How about deleting `fn enabled()` pretty much entirely?  It's only useful for implementing
+// the new `android-api-30` `__android_log_is_loggable_len()` and without tests mocking that,
+// bogus to call.  All filtering based on `log::max_level()` happens inside the `log::log!()`
+// macros already, and otherwise relies on the tests to call `init_once()` to ensure we call
+// `log::set_max_level()`.
+//
+// #[test]
+// fn logger_enabled_threshold() {
+//     let logger = AndroidLogger::new(
+//         Config::default().with_filter(FilterBuilder::new().filter_level(LevelFilter::Info).build()),
+//     );
 
-    assert!(logger.enabled(&log::MetadataBuilder::new().level(log::Level::Warn).build()));
-    assert!(logger.enabled(&log::MetadataBuilder::new().level(log::Level::Info).build()));
-    assert!(!logger.enabled(&log::MetadataBuilder::new().level(log::Level::Debug).build()));
-}
+//     assert!(logger.enabled(&log::MetadataBuilder::new().level(log::Level::Warn).build()));
+//     assert!(logger.enabled(&log::MetadataBuilder::new().level(log::Level::Info).build()));
+//     assert!(!logger.enabled(&log::MetadataBuilder::new().level(log::Level::Debug).build()));
+// }
 
 // Test whether the filter gets called correctly. Not meant to be exhaustive for all filter
 // options, as these are handled directly by the filter itself.
@@ -47,7 +50,7 @@ fn config_filter_match() {
     let info_record = Record::builder().level(log::Level::Info).build();
     let debug_record = Record::builder().level(log::Level::Debug).build();
 
-    let info_all_filter = env_filter::Builder::new().parse("info").build();
+    let info_all_filter = FilterBuilder::new().parse("info").build();
     let info_all_config = Config::default().with_filter(info_all_filter);
 
     assert!(info_all_config.filter_matches(&info_record));

@@ -192,12 +192,11 @@ pub mod tests {
     use crate::arrays::slice_assume_init_ref;
     use crate::platform_log_writer::PlatformLogWriter;
     use log::Level;
-    use std::ffi::CStr;
     use std::fmt::Write;
 
     #[test]
     fn platform_log_writer_init_values() {
-        let tag = CStr::from_bytes_with_nul(b"tag\0").unwrap();
+        let tag = c"tag";
 
         let writer = PlatformLogWriter::new(None, Level::Warn, tag);
 
@@ -318,10 +317,6 @@ pub mod tests {
     }
 
     fn get_tag_writer() -> PlatformLogWriter<'static> {
-        PlatformLogWriter::new(
-            None,
-            Level::Warn,
-            CStr::from_bytes_with_nul(b"tag\0").unwrap(),
-        )
+        PlatformLogWriter::new(None, Level::Warn, c"tag")
     }
 }
