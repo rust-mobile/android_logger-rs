@@ -66,7 +66,8 @@
 #[cfg(target_os = "android")]
 extern crate android_log_sys as log_ffi;
 
-use log::{Log, Metadata, Record};
+use config::is_loggable;
+use log::{LevelFilter, Log, Metadata, Record};
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::MaybeUninit;
@@ -142,7 +143,7 @@ static ANDROID_LOGGER: OnceLock<AndroidLogger> = OnceLock::new();
 
 /// Maximum length of a tag that does not require allocation.
 ///
-/// Tags configured explicitly in [Config] will not cause an extra allocation. When the tag is
+/// Tags configured explicitly in [`Config`] will not cause an extra allocation. When the tag is
 /// derived from the module path, paths longer than this limit will trigger an allocation for each
 /// log statement.
 ///
@@ -151,9 +152,12 @@ const LOGGING_TAG_MAX_LEN: usize = 127;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
 
 impl Log for AndroidLogger {
+    /// # Warning
+    /// This method relies on stateful data when `android-api-30` is enabled, including
+    /// [`log::max_level()`] which we only initialize when [`init_once()`] is called and which can
+    /// be changed by the user at any point via [`log::set_max_level()`].
     fn enabled(&self, metadata: &Metadata) -> bool {
-        self.config()
-            .is_loggable(metadata.target(), metadata.level())
+        is_loggable(metadata.target(), metadata.level())
     }
 
     fn log(&self, record: &Record) {
@@ -194,12 +198,10 @@ impl Log for AndroidLogger {
 
         // If a custom tag is used, add the module path to the message.
         // Use PlatformLogWriter to output chunks if they exceed max size.
+        use std::fmt::Write;
         let _ = match (&config.tag, &config.custom_format) {
             (_, Some(format)) => format(&mut writer, record),
-            (Some(_), _) => fmt::write(
-                &mut writer,
-                format_args!("{}: {}", module_path, *record.args()),
-            ),
+            (Some(_), _) => write!(&mut writer, "{}: {}", module_path, *record.args()),
             _ => fmt::write(&mut writer, *record.args()),
         };
 
@@ -213,7 +215,7 @@ impl Log for AndroidLogger {
 /// Send a log record to Android logging backend.
 ///
 /// This action does not require initialization. However, without initialization it
-/// will use the default filter, which allows all logs.
+/// will use the default filter, TODO Error default.
 pub fn log(record: &Record) {
     ANDROID_LOGGER
         .get_or_init(AndroidLogger::default)
@@ -228,12 +230,19 @@ pub fn log(record: &Record) {
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
 pub fn init_once(config: Config) {
-    let log_level = config.log_level;
+    // let log_level = config.log_level;
+    let log_level = config
+        .filter
+        .as_ref()
+        // Match the default Error level used by env_logger
+        .map_or(LevelFilter::Error, |f| f.filter());
     let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(config));
 
     if let Err(err) = log::set_logger(logger) {
-        log::debug!("android_logger: log::set_logger failed: {}", err);
-    } else if let Some(level) = log_level {
-        log::set_max_level(level);
+        // TODO: Bubble up the error (try_init()) or panic (init()), as suggested
+        // by the `log` crate and as implemented by `env_logger`.
+        log::debug!("android_logger: log::set_logger failed: {err}");
+    } else {
+        log::set_max_level(log_level);
     }
 }
