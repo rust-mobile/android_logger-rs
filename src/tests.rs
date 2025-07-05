@@ -1,3 +1,5 @@
+use log::LevelFilter;
+
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -21,7 +23,7 @@ fn log_calls_formatter() {
     });
     let logger = AndroidLogger::new(config);
 
-    logger.log(&Record::builder().level(log::Level::Info).build());
+    logger.log(&Record::builder().level(log::Level::Error).build());
 
     assert!(FORMAT_FN_WAS_CALLED.load(Ordering::SeqCst));
 }
@@ -50,11 +52,11 @@ fn config_filter_match() {
     let info_record = Record::builder().level(log::Level::Info).build();
     let debug_record = Record::builder().level(log::Level::Debug).build();
 
-    let info_all_filter = FilterBuilder::new().parse("info").build();
-    let info_all_config = Config::default().with_filter(info_all_filter);
+    let info_all_config = Config::default().filter_level(LevelFilter::Info);
+    let info_all_config = AndroidLogger::new(info_all_config);
 
-    assert!(info_all_config.filter_matches(&info_record));
-    assert!(!info_all_config.filter_matches(&debug_record));
+    assert!(info_all_config.filter.matches(&info_record));
+    assert!(!info_all_config.filter.matches(&debug_record));
 }
 
 #[test]

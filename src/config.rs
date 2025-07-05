@@ -1,17 +1,31 @@
 use crate::{FormatFn, LogId};
-#[cfg(all(target_os = "android", feature = "android-api-30"))]
-use log::LevelFilter;
-use log::{Level, Record};
+use log::{Level, LevelFilter, Record};
 use std::ffi::CString;
 use std::fmt;
 
 /// Filter for android logger.
-#[derive(Default)]
+// #[derive(Default)]
+// TODO: Rename to Builder.
 pub struct Config {
     pub(crate) buf_id: Option<LogId>,
-    pub(crate) filter: Option<env_filter::Filter>,
+    pub(crate) filter: env_filter::Builder,
     pub(crate) tag: Option<CString>,
     pub(crate) custom_format: Option<FormatFn>,
+}
+
+impl Default for Config {
+    /// Creates a default config that logs all modules at the [`LevelFilter::Error`] level by
+    /// default, when no other filters are set.
+    // TODO: Parse from env?
+    fn default() -> Self {
+        Self {
+            buf_id: None,
+            // TODO: This doesn't read from an env var like RUST_LOG...
+            filter: env_filter::Builder::new(),
+            tag: None,
+            custom_format: None,
+        }
+    }
 }
 
 impl fmt::Debug for Config {
@@ -88,19 +102,6 @@ pub(crate) fn is_loggable(tag: &str, record_level: Level) -> bool {
 }
 
 impl Config {
-    // /// Changes the maximum log level.
-    // ///
-    // /// Note, that `Trace` is the maximum level, because it provides the
-    // /// maximum amount of detail in the emitted logs.
-    // ///
-    // /// If `Off` level is provided, then nothing is logged at all.
-    // ///
-    // /// [`log::max_level()`] is considered as the default level.
-    // pub fn with_max_level(mut self, level: LevelFilter) -> Self {
-    //     self.log_level = Some(level);
-    //     self
-    // }
-
     /// Changes the Android logging system buffer to be used.
     ///
     /// By default, logs are sent to the [`Main`] log. Other logging buffers may
@@ -112,18 +113,26 @@ impl Config {
         self
     }
 
-    pub(crate) fn filter_matches(&self, record: &Record) -> bool {
-        if let Some(ref filter) = self.filter {
-            filter.matches(record)
-        } else {
-            true
-        }
+    /// Adds a directive to the filter for a specific module.
+    ///
+    /// Note that this replaces the default [`LevelFilter::Error`] for all global modules.
+    pub fn filter_module(mut self, module: &str, level: LevelFilter) -> Self {
+        self.filter.filter_module(module, level);
+        self
     }
 
-    // TODO: Replace this with env_logger-like constructors:
-    // https://docs.rs/env_logger/latest/env_logger/struct.Builder.html
-    pub fn with_filter(mut self, filter: env_filter::Filter) -> Self {
-        self.filter = Some(filter);
+    /// Adds a directive to the filter for all modules.
+    pub fn filter_level(mut self, level: LevelFilter) -> Self {
+        self.filter.filter_level(level);
+        self
+    }
+
+    /// Parses the directives string in the same form as the `RUST_LOG`
+    /// environment variable.
+    ///
+    /// See the `env_logger` module documentation for more details.
+    pub fn parse_filters(mut self, filters: &str) -> Self {
+        self.filter.parse(filters);
         self
     }
 
@@ -137,7 +146,6 @@ impl Config {
     /// # use android_logger::Config;
     /// android_logger::init_once(
     ///     Config::default()
-    ///         .with_max_level(log::LevelFilter::Trace)
     ///         .format(|f, record| write!(f, "my_app: {}", record.args()))
     /// )
     /// ```

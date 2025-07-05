@@ -5,69 +5,13 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-//! A logger which writes to android output.
-//!
-//! ## Example
-//!
-//! ```
-//! #[macro_use] extern crate log;
-//! extern crate android_logger;
-//!
-//! use log::LevelFilter;
-//! use android_logger::Config;
-//!
-//! /// Android code may not have obvious "main", this is just an example.
-//! fn main() {
-//!     android_logger::init_once(
-//!         Config::default().with_max_level(LevelFilter::Trace),
-//!     );
-//!
-//!     debug!("this is a debug {}", "message");
-//!     error!("this is printed by default");
-//! }
-//! ```
-//!
-//! ## Example with module path filter
-//!
-//! It is possible to limit log messages to output from a specific crate,
-//! and override the logcat tag name (by default, the crate name is used):
-//!
-//! ```
-//! #[macro_use] extern crate log;
-//! extern crate android_logger;
-//!
-//! use log::LevelFilter;
-//! use android_logger::{Config,FilterBuilder};
-//!
-//! fn main() {
-//!     android_logger::init_once(
-//!         Config::default()
-//!             .with_max_level(LevelFilter::Trace)
-//!             .with_tag("mytag")
-//!             .with_filter(FilterBuilder::new().parse("debug,hello::crate=trace").build()),
-//!     );
-//!
-//!     // ..
-//! }
-//! ```
-//!
-//! ## Example with a custom log formatter
-//!
-//! ```
-//! use android_logger::Config;
-//!
-//! android_logger::init_once(
-//!     Config::default()
-//!         .with_max_level(log::LevelFilter::Trace)
-//!         .format(|f, record| write!(f, "my_app: {}", record.args()))
-//! )
-//! ```
+#![doc = include_str!("../README.md")]
 
 #[cfg(target_os = "android")]
 extern crate android_log_sys as log_ffi;
 
 use config::is_loggable;
-use log::{LevelFilter, Log, Metadata, Record};
+use log::{Log, Metadata, Record};
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::MaybeUninit;
@@ -120,22 +64,28 @@ fn android_log(
 #[cfg(not(target_os = "android"))]
 fn android_log(_buf_id: Option<LogId>, _priority: log::Level, _tag: &CStr, _msg: &CStr) {}
 
-/// Underlying android logger backend
-#[derive(Debug, Default)]
+/// Underlying Android logger backend
+#[derive(Debug)]
 pub struct AndroidLogger {
-    config: OnceLock<Config>,
+    filter: env_filter::Filter,
+    config: Config,
+}
+
+impl Default for AndroidLogger {
+    /// Create new logger instance using the [default `Cofig`][Config::default()].
+    fn default() -> Self {
+        Self::new(Config::default())
+    }
 }
 
 impl AndroidLogger {
     /// Create new logger instance from config
-    pub fn new(config: Config) -> AndroidLogger {
+    pub fn new(mut config: Config) -> AndroidLogger {
         AndroidLogger {
-            config: OnceLock::from(config),
+            // TODO: This consumes the filter from the config, disallowing it to be reused...
+            filter: config.filter.build(),
+            config,
         }
-    }
-
-    fn config(&self) -> &Config {
-        self.config.get_or_init(Config::default)
     }
 }
 
@@ -161,15 +111,11 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
-        let config = self.config();
-
         if !self.enabled(record.metadata()) {
             return;
         }
 
-        // this also checks the level, but only if a filter was
-        // installed.
-        if !config.filter_matches(record) {
+        if !self.filter.matches(record) {
             return;
         }
 
@@ -181,7 +127,7 @@ impl Log for AndroidLogger {
 
         let module_path = record.module_path().unwrap_or_default();
 
-        let tag = if let Some(tag) = &config.tag {
+        let tag = if let Some(tag) = &self.config.tag {
             tag
         } else if module_path.len() < tag_bytes.len() {
             fill_tag_bytes(&mut tag_bytes, module_path.as_bytes())
@@ -194,12 +140,12 @@ impl Log for AndroidLogger {
 
         // message must not exceed LOGGING_MSG_MAX_LEN
         // therefore split log message into multiple log calls
-        let mut writer = PlatformLogWriter::new(config.buf_id, record.level(), tag);
+        let mut writer = PlatformLogWriter::new(self.config.buf_id, record.level(), tag);
 
         // If a custom tag is used, add the module path to the message.
         // Use PlatformLogWriter to output chunks if they exceed max size.
         use std::fmt::Write;
-        let _ = match (&config.tag, &config.custom_format) {
+        let _ = match (&self.config.tag, &self.config.custom_format) {
             (_, Some(format)) => format(&mut writer, record),
             (Some(_), _) => write!(&mut writer, "{}: {}", module_path, *record.args()),
             _ => fmt::write(&mut writer, *record.args()),
@@ -212,31 +158,32 @@ impl Log for AndroidLogger {
     fn flush(&self) {}
 }
 
-/// Send a log record to Android logging backend.
+/// Send a log record to the Android logging backend.
 ///
-/// This action does not require initialization. However, without initialization it
-/// will use the default filter, TODO Error default.
+/// This action does not require initialization, and does not initialize the [`mod@log`] framework
+/// to redirect all logs to [`AndroidLogger`].  If not otherwise configured earlier using
+/// [`init_once()`] this uses the default [`Config`] with [`log::LevelFilter::Error`].
 pub fn log(record: &Record) {
-    ANDROID_LOGGER
-        .get_or_init(AndroidLogger::default)
-        .log(record)
+    let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(Default::default()));
+    logger.log(record);
 }
 
-/// Initializes the global logger with an android logger.
+/// Initializes the global logger with an Android logger.
 ///
 /// This can be called many times, but will only initialize logging once,
 /// and will not replace any other previously initialized logger.
 ///
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
+///
+/// # Warning
+/// `config` is ignored on subsequent calls to either [`init_once()`] or [`log()`].
 pub fn init_once(config: Config) {
-    // let log_level = config.log_level;
-    let log_level = config
-        .filter
-        .as_ref()
-        // Match the default Error level used by env_logger
-        .map_or(LevelFilter::Error, |f| f.filter());
     let logger = ANDROID_LOGGER.get_or_init(|| AndroidLogger::new(config));
+
+    // TODO: Only continue if ANDROID_LOGGER was None?
+
+    let log_level = logger.filter.filter();
 
     if let Err(err) = log::set_logger(logger) {
         // TODO: Bubble up the error (try_init()) or panic (init()), as suggested

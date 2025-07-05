@@ -3,6 +3,12 @@
 
 All user visible changes to this project will be documented in this file. This project uses [Semantic Versioning 2.0.0].
 
+## [TODO]
+
+- Remove `max_level` in favour of extracting it from the `Filter`
+
+// TODO: bunch of releases are missing?
+
 
 
 
