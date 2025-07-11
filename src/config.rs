@@ -4,19 +4,33 @@ use std::ffi::CString;
 use std::fmt;
 
 /// Filter for android logger.
-#[derive(Default)]
+// #[derive(Default)]
+// TODO: Rename to Builder.
 pub struct Config {
-    pub(crate) log_level: Option<LevelFilter>,
     pub(crate) buf_id: Option<LogId>,
-    filter: Option<env_filter::Filter>,
+    pub(crate) filter: env_filter::Builder,
     pub(crate) tag: Option<CString>,
     pub(crate) custom_format: Option<FormatFn>,
+}
+
+impl Default for Config {
+    /// Creates a default config that logs all modules at the [`LevelFilter::Error`] level by
+    /// default, when no other filters are set.
+    // TODO: Parse from env?
+    fn default() -> Self {
+        Self {
+            buf_id: None,
+            // TODO: This doesn't read from an env var like RUST_LOG...
+            filter: env_filter::Builder::new(),
+            tag: None,
+            custom_format: None,
+        }
+    }
 }
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
-            .field("log_level", &self.log_level)
             .field("buf_id", &self.buf_id)
             .field("filter", &self.filter)
             .field("tag", &self.tag)
@@ -62,39 +76,32 @@ fn android_is_loggable_len(
 }
 
 #[cfg(not(all(target_os = "android", feature = "android-api-30")))]
-fn default_is_loggable(_tag: &str, record_level: Level, config_level: Option<LevelFilter>) -> bool {
-    record_level <= config_level.unwrap_or_else(log::max_level)
+pub(crate) fn is_loggable(_tag: &str, _record_level: Level) -> bool {
+    // There is nothing to test here, the `log` macros already checked the variable
+    // `log::max_level()` before calling into the implementation.
+    // The tests ensure this by creating and calling into `AndroidLogger::log()` without
+    // `set_max_level()` from `init_once()`, and expect the message to be logged.
+    true
 }
 
 #[cfg(all(target_os = "android", feature = "android-api-30"))]
-fn android_is_loggable(tag: &str, record_level: Level, config_level: Option<LevelFilter>) -> bool {
+pub(crate) fn is_loggable(tag: &str, record_level: Level) -> bool {
     let prio = android_log_priority_from_level(record_level);
     // Priority to use in case no system-wide or process-wide overrides are set.
-    let default_prio = match config_level {
-        Some(level_filter) => match level_filter.to_level() {
-            Some(level) => android_log_priority_from_level(level),
-            // LevelFilter::to_level() returns None only for LevelFilter::Off
-            None => android_log_sys::LogPriority::SILENT,
-        },
-        None => android_log_sys::LogPriority::INFO,
+    // WARNING: Reading live `log::max_level()` state here would break tests, for example when
+    // `AndroidLogger` is constructed and `AndroidLogger::log()` is called _without_ going through
+    // `init_once()` which would call `log::set_max_level()`, leaving this at `Off`.  Currently no
+    // tests exist that run on live Android devices and/or mock `__android_log_is_loggable_len()`
+    // such that this function can be called.
+    let default_prio = match log::max_level().to_level() {
+        Some(level) => android_log_priority_from_level(level),
+        // LevelFilter::to_level() returns None only for LevelFilter::Off
+        None => android_log_sys::LogPriority::SILENT,
     };
     android_is_loggable_len(prio, tag, default_prio)
 }
 
 impl Config {
-    /// Changes the maximum log level.
-    ///
-    /// Note, that `Trace` is the maximum level, because it provides the
-    /// maximum amount of detail in the emitted logs.
-    ///
-    /// If `Off` level is provided, then nothing is logged at all.
-    ///
-    /// [`log::max_level()`] is considered as the default level.
-    pub fn with_max_level(mut self, level: LevelFilter) -> Self {
-        self.log_level = Some(level);
-        self
-    }
-
     /// Changes the Android logging system buffer to be used.
     ///
     /// By default, logs are sent to the [`Main`] log. Other logging buffers may
@@ -106,25 +113,26 @@ impl Config {
         self
     }
 
-    pub(crate) fn filter_matches(&self, record: &Record) -> bool {
-        if let Some(ref filter) = self.filter {
-            filter.matches(record)
-        } else {
-            true
-        }
+    /// Adds a directive to the filter for a specific module.
+    ///
+    /// Note that this replaces the default [`LevelFilter::Error`] for all global modules.
+    pub fn filter_module(mut self, module: &str, level: LevelFilter) -> Self {
+        self.filter.filter_module(module, level);
+        self
     }
 
-    pub(crate) fn is_loggable(&self, tag: &str, level: Level) -> bool {
-        #[cfg(all(target_os = "android", feature = "android-api-30"))]
-        use android_is_loggable as is_loggable;
-        #[cfg(not(all(target_os = "android", feature = "android-api-30")))]
-        use default_is_loggable as is_loggable;
-
-        is_loggable(tag, level, self.log_level)
+    /// Adds a directive to the filter for all modules.
+    pub fn filter_level(mut self, level: LevelFilter) -> Self {
+        self.filter.filter_level(level);
+        self
     }
 
-    pub fn with_filter(mut self, filter: env_filter::Filter) -> Self {
-        self.filter = Some(filter);
+    /// Parses the directives string in the same form as the `RUST_LOG`
+    /// environment variable.
+    ///
+    /// See the `env_logger` module documentation for more details.
+    pub fn parse_filters(mut self, filters: &str) -> Self {
+        self.filter.parse(filters);
         self
     }
 
@@ -138,7 +146,6 @@ impl Config {
     /// # use android_logger::Config;
     /// android_logger::init_once(
     ///     Config::default()
-    ///         .with_max_level(log::LevelFilter::Trace)
     ///         .format(|f, record| write!(f, "my_app: {}", record.args()))
     /// )
     /// ```

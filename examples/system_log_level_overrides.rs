@@ -1,4 +1,4 @@
-//! An utility for testing the behavior of `android_logger` crate.
+//! An utility for testing the behavior of the `android_logger` crate.
 //!
 //! ## Build
 //!
@@ -37,7 +37,7 @@
 //!    HOME=$PWD bin/launch_cvd
 //!    ```
 //!
-//!    Once emulator launches, `adb` should detect it on `0.0.0.0:6520`
+//!    Once the emulator launches, `adb` should detect it on `0.0.0.0:6520`
 //!    automatically. Shut down the `launch_cvd` command to exit the emulator.
 //!
 //! 3. Upload & run:
@@ -55,7 +55,7 @@
 //!
 //! ```
 //! # default: should print info+ logs in `adb logcat -s log_test`
-//! # hint: use `adb logcat -v color` is awesome too
+//! # hint: `adb logcat -v color` is awesome too
 //! adb shell /data/local/tmp/system_log_level_overrides
 //!
 //! # should print trace+ logs in `adb logcat -s log_test`
@@ -71,9 +71,10 @@ fn main() {
     android_logger::init_once(
         android_logger::Config::default()
             .with_tag("log_test")
-            // If set, this is the highest level to log unless overriddeby by the system.
-            // Note the verbosity can be *increased* through system properties.
-            .with_max_level(log::LevelFilter::Info),
+            // If set, this is the highest level to log unless overridden by the system.
+            // Note the verbosity can be *increased* through system properties, as long
+            // as it is also increased in the `log` crate (see the override below).
+            .filter_level(log::LevelFilter::Info),
     );
     // The log crate applies its filtering before we even get to android_logger.
     // Pass everything down so that Android's liblog can determine the log level instead.
