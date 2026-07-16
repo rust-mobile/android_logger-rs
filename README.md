@@ -32,7 +32,8 @@ fn native_activity_create() {
             .with_tag("mytag") // logs will show under mytag tag
             .with_filter( // configure messages for specific crate
                 FilterBuilder::new()
-                    .parse("debug,hello::crate=error")
+                    .try_parse("debug,hello::crate=error")
+                    .expect("Failed to build filter")
                     .build())
     );
 
