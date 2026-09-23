@@ -187,6 +187,12 @@ impl fmt::Write for PlatformLogWriter<'_> {
     }
 }
 
+impl Drop for PlatformLogWriter<'_> {
+    fn drop(&mut self) {
+        self.flush();
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::arrays::slice_assume_init_ref;

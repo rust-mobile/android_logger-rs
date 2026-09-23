@@ -73,7 +73,7 @@ use std::mem::MaybeUninit;
 use std::sync::OnceLock;
 
 use crate::arrays::{fill_tag_bytes, uninit_array};
-use crate::platform_log_writer::PlatformLogWriter;
+pub use crate::platform_log_writer::PlatformLogWriter;
 pub use config::Config;
 pub use env_filter::{Builder as FilterBuilder, Filter};
 pub use id::LogId;
@@ -202,9 +202,6 @@ impl Log for AndroidLogger {
             ),
             _ => fmt::write(&mut writer, *record.args()),
         };
-
-        // output the remaining message (this would usually be the most common case)
-        writer.flush();
     }
 
     fn flush(&self) {}
