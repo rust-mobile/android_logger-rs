@@ -47,7 +47,10 @@ fn config_filter_match() {
     let info_record = Record::builder().level(log::Level::Info).build();
     let debug_record = Record::builder().level(log::Level::Debug).build();
 
-    let info_all_filter = env_filter::Builder::new().parse("info").build();
+    let info_all_filter = env_filter::Builder::new()
+        .try_parse("info")
+        .expect("Failed to build filter")
+        .build();
     let info_all_config = Config::default().with_filter(info_all_filter);
 
     assert!(info_all_config.filter_matches(&info_record));

@@ -44,7 +44,7 @@
 //!         Config::default()
 //!             .with_max_level(LevelFilter::Trace)
 //!             .with_tag("mytag")
-//!             .with_filter(FilterBuilder::new().parse("debug,hello::crate=trace").build()),
+//!             .with_filter(FilterBuilder::new().try_parse("debug,hello::crate=trace").expect("Failed to build filter").build()),
 //!     );
 //!
 //!     // ..
