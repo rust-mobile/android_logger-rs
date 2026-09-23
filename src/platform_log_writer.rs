@@ -140,16 +140,18 @@ impl PlatformLogWriter<'_> {
 
 impl fmt::Write for PlatformLogWriter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let mut incoming_bytes = s.as_bytes();
+        let mut incoming = s;
 
-        while !incoming_bytes.is_empty() {
+        loop {
             let len = self.len;
 
-            // write everything possible to buffer and mark last \n
-            let new_len = len + incoming_bytes.len();
-            let last_newline = self.buffer[len..LOGGING_MSG_MAX_LEN]
+            // write everything possible to buffer considering char boundary and mark last \n
+            let (to_buffer, remaining) =
+                floor_at_char_boundary_and_split(incoming, LOGGING_MSG_MAX_LEN - len);
+            let new_len = len + to_buffer.len();
+            let last_newline = self.buffer[len..new_len]
                 .iter_mut()
-                .zip(incoming_bytes)
+                .zip(to_buffer.as_bytes())
                 .enumerate()
                 .fold(None, |acc, (i, (output, input))| {
                     if *input == b'\0' {
@@ -166,24 +168,31 @@ impl fmt::Write for PlatformLogWriter<'_> {
             if let Some(newline) = last_newline {
                 self.last_newline_index = len + newline;
             }
+            // update len
+            self.len = new_len;
 
-            // calculate how many bytes were written
-            let written_len = if new_len <= LOGGING_MSG_MAX_LEN {
-                // if the len was not exceeded
-                self.len = new_len;
-                new_len - len // written len
-            } else {
-                // if new length was exceeded
-                self.len = LOGGING_MSG_MAX_LEN;
-                self.temporal_flush();
+            // if remaining is empty stop
+            if remaining.is_empty() {
+                break;
+            }
 
-                LOGGING_MSG_MAX_LEN - len // written len
-            };
-
-            incoming_bytes = &incoming_bytes[written_len..];
+            // flush to make room and write remaining
+            self.temporal_flush();
+            incoming = remaining;
         }
 
         Ok(())
+    }
+}
+
+/// Combination of `[str::floor_char_boundary]` and `[str::split_at]`
+#[inline]
+fn floor_at_char_boundary_and_split(text: &str, mut index: usize) -> (&str, &str) {
+    loop {
+        if let Some(split) = text.split_at_checked(index) {
+            return split;
+        }
+        index -= 1;
     }
 }
 
@@ -314,6 +323,24 @@ pub mod tests {
         assert_eq!(
             unsafe { slice_assume_init_ref(&writer.buffer[..test_string.len()]) },
             test_string.replace("\0", " ").as_bytes()
+        );
+    }
+
+    #[test]
+    fn writer_splits_on_utf8_correctly() {
+        let mut test_string = Vec::from([b' '; 3999]);
+        test_string.extend_from_slice("\u{00DF}".as_bytes());
+        let test_string =
+            String::from_utf8(test_string).expect("Unable to convert bytes to String");
+
+        let mut writer = get_tag_writer();
+        writer
+            .write_str(&test_string)
+            .expect("Unable to write to PlatformLogWriter");
+
+        assert_eq!(
+            unsafe { slice_assume_init_ref(&writer.buffer[..2]) },
+            "ß".as_bytes()
         );
     }
 
